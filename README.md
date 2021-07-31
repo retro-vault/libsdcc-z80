@@ -8,8 +8,7 @@ It's when you use the *SDCC* C compiler without default startup code, header fil
 and `--no-std-crt0`). An example of this would be targeting a non-supported *Z80* architecture or building an operating system.
 
 **libsdcc-z80** is the glue betweeen the *SDCC* C compiler and the
-*Z80* processor. *Z80* lacks instructions for integer and 
-floating point arithmetics.
+*Z80* processor. *Z80* lacks instructions for integer and floating point arithmetics.
 
 To mitigate it, the *SDCC* C compiler replaces these non-existing
 instructions with calls to special functions (such as: `__mulint`).
@@ -17,14 +16,36 @@ Invisible to you, the linker then links these special functions
 with your code.
 
 This works in the *SDCC* realm, but if you prevent the compiler to link
-default *SDCC* libraries then you need to provide these special functions,
-and the `libsdcc-z80` does that.
+default *SDCC* libraries then you need to provide these special functions, and the `libsdcc-z80` does that.
 
-## How to create bare metal program?
+## How do I compile the libsdcc-z80?
 
-First you need a startup code. By convention you should call it `crt0.s` (*the C runtime*). This code must prepare the layout for your C program - configure the areas, initialize static variables, set the stack pointer, and jump to your `main()` function. You can find an example of `crt0.s` in the `sample` folder.
+Use `make` command in the root directory to compile *libsdcc-z80*. This will build the library inside the  `build` directory and copy the binary `libsdcc-z80.lib` into the `bin` directory.
 
-Then write your C program. And compile and link with **libsdcc-z80**. If your program is called `test.c`, here is teh compilation process that produces `test.bin`.
+### Can I skip the compilation?
+
+Yes you can. Latest version of precompiled library is always available in the `bin` directory.
+
+### Can I use custom build and bin folders?
+
+Yes. To compile this project from your project, pass absolute directories as variables `BUILD_DIR` and `BIN_DIR`.
+
+`make BUILD_DIR=~/myproj/build BIN_DIR=~/myproj/bin`
+
+## Is there a sample available?
+
+Check the `sample` directory! It contains a complete bare metal Z80 program and startup code for ZX Spectrum 48K that compiles to the `0x8000` address (data segment to `0x8100`) and uses basic `long`, `long long`, and `float` operations.
+
+ > A `Makefile` in this directory was deliberately stripped of all 
+ > complexity so you can learn how the compilation works by reading it.
+
+## How do I create a bare metal program?
+
+First you need a startup code. This is a code that is executed before your C program `main()` function is called. By convention you should call it `crt0.s` (*the C runtime*). This code must prepare the layout for your C program: configure the areas, initialize static variables, set the stack pointer, and jump to your `main()` function. You can find an example of `crt0.s` in the `sample` folder. Then you need to write your C program. When you have both, you compile and link them with **libsdcc-z80.lib**. 
+
+ > When linking you must pass `crt0.rel` as the first linker file! 
+
+Here is the compilation process that produces `test.bin` from `test.c`.
 
 ~~~z80
 # Assemble crt0.s
@@ -49,27 +70,7 @@ sdcc -o test.ihx \
 sdobjcopy -I ihex -O binary test.ihx test.bin
 ~~~
 
- > When linking you must pass `crt0.rel` as the first linker file! 
-
-## Compiling the libsdcc-z80
-
-Use `make` command in the root directory. This will build the library inside the  `build` directory and copy the binary `libsdcc-z80.lib` into the `bin` directory.
-
-### Custom build and bin folders
-
-To chain compile the library from your project, you can pass absolute directories as variables `BUILD_DIR` and `BIN_DIR`.
-
-`make BUILD_DIR=~/myproj/build BIN_DIR=~/myproj/bin`
-
-### Sample
-
-This directory contains of a bare metal Z80 program that compiles to the `0x8000` address (data segment to `0x8100`) and tests basic `long`, `long long`, and `float` operations.
-
-Consult `Makefile` for details.
-
-### Precompiled library is available in the git repo
-
-Latest precompiled library readily available in the `bin` directory.
+And, voila, your `test.bin` is ready.
 
 [language.url]:   https://en.wikipedia.org/wiki/ANSI_C
 [language.badge]: https://img.shields.io/badge/language-C-blue.svg
