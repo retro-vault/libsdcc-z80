@@ -16,7 +16,7 @@ Invisible to you, the linker then links these special functions
 with your code.
 
 This works in the *SDCC* realm, but if you prevent the compiler to link
-default *SDCC* libraries then you need to provide these special functions, and the `libsdcc-z80` does that.
+default *SDCC* libraries then you need to provide these special functions, and the **libsdcc-z80** does that.
 
 ## How do I compile the libsdcc-z80?
 
@@ -34,14 +34,14 @@ Yes. To compile this project from your project, pass absolute directories as var
 
 ## Is there a sample available?
 
-Check the `sample` directory! It contains a complete bare metal Z80 program and startup code for ZX Spectrum 48K that compiles to the `0x8000` address (data segment to `0x8100`) and uses basic `long`, `long long`, and `float` operations.
+Check the `sample` directory! It contains a complete bare metal *Z80* program and startup code for *ZX Spectrum 48K* that compiles to the `0x8000` address (data segment to `0x8100`) and uses basic `long`, `long long`, and `float` operations.
 
  > A `Makefile` in this directory was deliberately stripped of all 
  > complexity so you can learn how the compilation works by reading it.
 
 ## How do I create a bare metal program?
 
-First you need a startup code. This is a code that is executed before your C program `main()` function is called. By convention you should call it `crt0.s` (*the C runtime*). This code must prepare the layout for your C program: configure the areas, initialize static variables, set the stack pointer, and jump to your `main()` function. You can find an example of `crt0.s` in the `sample` folder. Then you need to write your C program. When you have both, you compile and link them with **libsdcc-z80.lib**. 
+First you need a startup code. This is a code that is executed before your C program `main()` function is called. By convention you should call it `crt0.s` (*the C runtime*). This code must prepare the layout for your C program: configure the areas, initialize static variables, set the stack pointer, and jump to your `main()` function. You can find an example of `crt0.s` in the `sample` folder. Then you need to write your C program. When you have both, you compile and link them with `libsdcc-z80.lib`. 
 
  > When linking you must pass `crt0.rel` as the first linker file! 
 
