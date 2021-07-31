@@ -72,6 +72,10 @@ sdobjcopy -I ihex -O binary test.ihx test.bin
 
 And, voila, your `test.bin` is ready.
 
+## How do I leave feedback?
+
+Use the GitHub *Issues* on top of this page. 
+
 [language.url]:   https://en.wikipedia.org/wiki/ANSI_C
 [language.badge]: https://img.shields.io/badge/language-C-blue.svg
 
