@@ -74,8 +74,8 @@ Latest precompiled library readily available in the `bin` directory.
 [language.url]:   https://en.wikipedia.org/wiki/ANSI_C
 [language.badge]: https://img.shields.io/badge/language-C-blue.svg
 
-[standard.url]:   https://en.wikipedia.org/wiki/C89/
-[standard.badge]: https://img.shields.io/badge/standard-C89-blue.svg
+[standard.url]:   https://en.wikipedia.org/wiki/C11_(C_standard_revision)
+[standard.badge]: https://img.shields.io/badge/standard-C11-blue.svg
 
 [license.url]:    https://github.com/tstih/nice/blob/master/LICENSE
 [license.badge]:  https://img.shields.io/badge/license-MIT-blue.svg
