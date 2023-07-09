@@ -51,8 +51,11 @@ union float_long
   };
 
 /* compare two floats */
-_Bool
-__fseq (float a1, float a2)
+#if(__SDCC_VERSION_MAJOR>=4 && __SDCC_VERSION_MINOR>0)
+_Bool __fseq (float a1, float a2)
+#else
+char __fseq (float a1, float a2)
+#endif
 {
   volatile union float_long fl1, fl2;
 

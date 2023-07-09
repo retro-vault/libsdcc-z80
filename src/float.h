@@ -73,8 +73,13 @@ float __fssub (float, float);
 float __fsmul (float, float);
 float __fsdiv (float, float);
 
+#if(__SDCC_VERSION_MAJOR>=4 && __SDCC_VERSION_MINOR>0)
 _Bool __fslt (float, float);
 _Bool __fseq (float, float);
+#else
+char __fslt (float, float);
+char __fseq (float, float);
+#endif
 char __fsgt (float, float);
 
 #endif	/* __SDC51_FLOAT_H */
