@@ -51,7 +51,7 @@ union float_long
   };
 
 /* compare two floats */
-char __fslt (float a1, float a2)
+_Bool __fslt (float a1, float a2)
 {
   volatile union float_long fl1, fl2;
 

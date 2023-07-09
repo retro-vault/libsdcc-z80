@@ -73,8 +73,8 @@ float __fssub (float, float);
 float __fsmul (float, float);
 float __fsdiv (float, float);
 
-char __fslt (float, float);
-char __fseq (float, float);
+_Bool __fslt (float, float);
+_Bool __fseq (float, float);
 char __fsgt (float, float);
 
 #endif	/* __SDC51_FLOAT_H */
