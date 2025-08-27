@@ -27,7 +27,7 @@ __mulint:
         ;; outputs: de = product low word
         ;; clobbers: a, b, c, h, l, f
         ;; notes: classic shift-add loop; fast path when b = 0 (8-bit)
-__mul16:
+__mul16::
         xor     a                                 ; a = 0
         ld      l, a                              ; l = 0, hl accumulates sum
         or      a, b                              ; set z if high byte of bc = 0
