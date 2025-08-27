@@ -1,59 +1,45 @@
-;--------------------------------------------------------------------------
-;  __strreverse.s
-;
-;  Copyright (C) 2020-2021, Sergey Belyashov
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; reverse a string in place (two-pointer swap from ends to middle)
+        ;; starts at end-1 (before nul) and swaps with start while hl>=de
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2020-2021 sergey belyashov
+		
+        .module __strreverse                       ; module name
+        .optsdcc -mz80 sdcccall(1)                 ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                              ; code segment
 
-	.module __strreverse
-	.optsdcc -mz80 sdcccall(1)
+        .globl  ___strreverse                      ; export symbols
+        .globl  ___strreverse_reg
 
-	.area   _CODE
+        ;; ___strreverse
+        ;; inputs:  hl = start, de = end (points to terminating nul)
+        ;; outputs: none (string reversed in place)
+        ;; clobbers: a, c, de, hl, f
+        ;; notes: swaps hl<->de so the worker sees hl=end, de=start
+___strreverse:
+        ex      de, hl                             ; worker expects hl=end, de=start
 
-	.globl ___strreverse
-	.globl ___strreverse_reg
-;
-;void __reverse(char *beg, char *end);
-;
-___strreverse::
-	ex	de, hl
-;
-;in: HL - pointer to end of string (null symbol), DE - pointer to start of string
-;
-___strreverse_reg::
-	jr	110$
+        ;; ___strreverse_reg
+        ;; inputs:  hl = end (points to terminating nul), de = start
+        ;; outputs: none (in-place)
+        ;; clobbers: a, c, de, hl, f
+        ;; notes: uses sbc hl,de with carry=0 to compare, then restores
+        ;;        hl by add hl,de before swapping bytes
+___strreverse_reg:
+        jr      110$                               ; jump to compare logic
 100$:
-	add	hl, de
-	ld	a, (de)
-	ld	c, (hl)
-	ld	(hl), a
-	ld	a, c
-	ld	(de), a
-	inc	de
+        add     hl, de                             ; restore hl after sbc
+        ld      a, (de)                            ; a = *de
+        ld      c, (hl)                            ; c = *hl
+        ld      (hl), a                            ; *hl = old *de
+        ld      a, c                               ; a = old *hl
+        ld      (de), a                            ; *de = old *hl
+        inc     de                                 ; move start forward
 110$:
-	dec	hl
-	or	a, a
-	sbc	hl, de
-	jr	NC, 100$
-	ret
+        dec     hl                                 ; move end backward (skip nul)
+        or      a, a                               ; clear carry for compare
+        sbc     hl, de                             ; hl = hl - de (sets flags)
+        jr      nc, 100$                           ; while (hl >= de) do swap
+        ret                                        ; done

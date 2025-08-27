@@ -1,84 +1,65 @@
-;--------------------------------------------------------------------------
-;  __uitobcd.s
-;
-;  Copyright (C) 2020-2021, Sergey Belyashov
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; convert unsigned int to packed bcd (3 bytes)
+        ;; shifts 16-bit value and daa-accumulates into c,d,e (low..high)
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2020-2021 sergey belyashov
+		
+        .module __uitobcd                          ; module name
+        .optsdcc -mz80 sdcccall(1)                 ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                              ; code segment
 
-	.module __uitobcd
-	.optsdcc -mz80 sdcccall(1)
+        .globl  ___uitobcd                         ; export symbol
 
-	.area   _CODE
-
-	.globl ___uitobcd
-;
-; void __uitobcd (unsigned int v, unsigned char bcd[3])
-; __uitobcd converts v to BCD representation to the bcd.
-; bcd[] will contain BCD value.
-;
+        ;; ___uitobcd
+        ;; inputs (sdcccall):
+        ;;   hl = value (unsigned 16-bit)
+        ;;   de = pointer to bcd[3]
+        ;; outputs:
+        ;;   stores 3 bcd bytes to *de (order: ones, tens, hundreds)
+        ;; clobbers:
+        ;;   a, b, c, d, e, h, l, f
+        ;; notes:
+        ;;   double dabble via daa over 16 shifts; small fast path when h=0
 ___uitobcd:
-	push	de
-;
-	ld	bc, #0x1000
-	ld	d, c
-	ld	e, c
-;
-;--- begin speed optimization
-;
-	ld	a, h
-	or	a, a
-	jr	NZ, 100$
-;
-	ld	h, l
-	srl	b
-;
-;--- end speed optimization
-;
-; HL - binary value
-; CDE - future BCD value
-; B - bits count (16)
+        push    de                                 ; save bcd pointer
+        ld      bc, #0x1000                        ; b = 16 shift count, c = 0
+        ld      d, c                               ; d = 0 (bcd mid)
+        ld      e, c                               ; e = 0 (bcd low)
+
+        ;; --- begin speed optimization -------------------------------------
+        ld      a, h                               ; check if high byte is zero
+        or      a, a                               ; z => value fits in 8 bits
+        jr      nz, 100$                           ; skip if not zero
+        ld      h, l                               ; compact: put low byte in h
+        srl     b                                  ; halve shift count: 16 -> 8
+        ;; --- end speed optimization ---------------------------------------
+
+        ;; hl = binary value (h carries the active byte)
+        ;; cde = future bcd value (low..high), b = bit count
 100$:
-	add	hl, hl
-	ld	a, e
-	adc	a, a
-	daa
-	ld	e, a
-	ld	a, d
-	adc	a, a
-	daa
-	ld	d, a
-	ld	a, c
-	adc	a, a
-	daa
-	ld	c, a
-	djnz	100$
-;
-	pop	hl
-	ld	(hl), e
-	inc	hl
-	ld	(hl), d
-	inc	hl
-	ld	(hl), c
-;
-	ret
+        add     hl, hl                             ; shift value left
+        ld      a, e                               ; bcd low nibble
+        adc     a, a                               ; add next bit with carry
+        daa                                         ; adjust to bcd
+        ld      e, a                               ; store back
+
+        ld      a, d                               ; bcd middle
+        adc     a, a
+        daa
+        ld      d, a
+
+        ld      a, c                               ; bcd high
+        adc     a, a
+        daa
+        ld      c, a
+        djnz    100$                               ; loop for all bits
+
+        pop     hl                                 ; hl = bcd pointer
+        ld      (hl), e                            ; store ones
+        inc     hl
+        ld      (hl), d                            ; store tens
+        inc     hl
+        ld      (hl), c                            ; store hundreds
+        ret                                         ; done

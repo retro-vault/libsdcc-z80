@@ -1,125 +1,118 @@
-;--------------------------------------------------------------------------
-;  __ultobcd.s
-;
-;  Copyright (C) 2020-2021, Sergey Belyashov
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; convert unsigned long to packed bcd (5 bytes)
+        ;; shifts the 32-bit value bit-by-bit and daa-accumulates into c,d,e,h,l
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2020-2021 sergey belyashov
+		
+        .module __ultobcd                           ; module name
+        .optsdcc -mz80 sdcccall(1)                  ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                               ; code segment
 
-	.module __ultobcd
-	.optsdcc -mz80 sdcccall(1)
+        .globl  ___ultobcd                          ; export symbol
 
-	.area   _CODE
-
-	.globl ___ultobcd
-;
-; void __ultobcd (unsigned long v, unsigned char bcd[5])
-; __ultobcd converts v to BCD representation to the bcd.
-; bcd[] will contain BCD value.
-;
+        ;; ___ultobcd
+        ;; inputs (sdcccall):
+        ;;   stack: (ix-4..ix-1) = v (u32, little endian)
+        ;;           top-of-stack = bcd pointer (u8[5]); popped late into hl
+        ;; outputs:
+        ;;   stores 5 bcd bytes to *bcd (order: ones, tens, hundreds, thousands,
+        ;;   ten-thousands), no return value
+        ;; clobbers:
+        ;;   a, b, c, d, e, h, l, ix, f; uses sp temporaries, preserves none
+        ;; notes:
+        ;;   uses double dabble (shift-add-3 via daa) over 32 bits. a 32→20 bcd
+        ;;   conversion fits in c,d,e,h,l (5 bytes). includes small fast-paths.
 ___ultobcd:
-	pop	af
-	pop	bc
-	push	af
-	push	bc
-	push	ix
-	ld	ix, #0
-	add	ix, sp
-;	ld	sp, ix		; sp already equals ix
-;
-	ld	bc, #0x2000
-;
-;--- begin speed optimization
-;
-	ld	a, l
-	or	a, h
-	jr	NZ, 101$
-;high 2 bytes are zero
-	ld	b, #0x10
-	ex	de, hl
+        pop     af                                  ; save return address
+        pop     bc                                  ; pop bcd pointer
+        push    af                                  ; restore return to stack
+        push    bc                                  ; keep bcd pointer on stack
+        push    ix                                  ; save ix
+        ld      ix, #0                              ; ix <- sp (frame base)
+        add     ix, sp                              ; ix = sp
+        ; ld     sp, ix                              ; sp already equals ix
+
+        ld      bc, #0x2000                         ; b = bit count guess, c unused
+
+        ;; --- begin speed optimization -------------------------------------
+        ld      a, l                                ; test high 16 bits zero?
+        or      a, h                                ; z if hl == 0
+        jr      nz, 101$                            ; skip if not zero
+        ; high 2 bytes are zero
+        ld      b, #0x10                            ; only 16 shifts needed
+        ex      de, hl                              ; move low 16 into hl
 101$:
-	ld	a, h
-	or	a, a
-	jr	NZ, 102$
-;high byte is zero
-	ld	h, l
-	ld	l, d
-	ld	d, e
-	ld	a, #-8
-	add	a, b
-	ld	b, a
+        ld      a, h                                ; test high 8 bits zero?
+        or      a, a                                ; z if h == 0
+        jr      nz, 102$                            ; skip if not zero
+        ; high byte is zero
+        ld      h, l                                ; compact 24→16 for shifts
+        ld      l, d
+        ld      d, e
+        ld      a, #-8                              ; reduce shift count by 8
+        add     a, b
+        ld      b, a
 102$:
-	push	hl
-	push	de
-;
-;--- end speed optimization
-;
-	ld	hl, #0x0000
-	ld	e, l
-	ld	d, h
-; (ix+0)..(ix+3) - binary value
-; CDEHL - future BCD value
-; B - bits count (32)
+        push    hl                                  ; save compacted low word
+        push    de                                  ; save the other word
+        ;; --- end speed optimization ---------------------------------------
+
+        ld      hl, #0x0000                         ; init bcd accum: hl = 0000
+        ld      e, l                                ; e = 00
+        ld      d, h                                ; d = 00
+        ; (ix-4)..(ix-1) = binary value
+        ; c,d,e,h,l = future bcd (low..high)
+        ; b = bits count (starts from 32 or reduced by fast path)
+
 103$:
-	sla	-4 (ix)
-	rl	-3 (ix)
-	rl	-2 (ix)
-	rl	-1 (ix)
-	ld	a, l
-	adc	a, a
-	daa
-	ld	l, a
-	ld	a, h
-	adc	a, a
-	daa
-	ld	h, a
-	ld	a, e
-	adc	a, a
-	daa
-	ld	e, a
-	ld	a, d
-	adc	a, a
-	daa
-	ld	d, a
-	ld	a, c
-	adc	a, a
-	daa
-	ld	c, a
-	djnz	103$
-;
-	ld	b, l
-	ld	a, h
-	ld	sp, ix
-	pop	ix
-	pop	hl
-	ld	(hl), b
-	inc	hl
-	ld	(hl), a
-	inc	hl
-	ld	(hl), e
-	inc	hl
-	ld	(hl), d
-	inc	hl
-	ld	(hl), c
-;
-	ret
+        sla     (ix-4)                              ; shift value left through
+        rl      (ix-3)                              ;  its 4 bytes on stack
+        rl      (ix-2)
+        rl      (ix-1)
+
+        ld      a, l                                ; add lowest bcd byte + carry
+        adc     a, a
+        daa                                         ; adjust to bcd
+        ld      l, a
+
+        ld      a, h                                ; next bcd byte
+        adc     a, a
+        daa
+        ld      h, a
+
+        ld      a, e                                ; next
+        adc     a, a
+        daa
+        ld      e, a
+
+        ld      a, d                                ; next
+        adc     a, a
+        daa
+        ld      d, a
+
+        ld      a, c                                ; highest bcd byte
+        adc     a, a
+        daa
+        ld      c, a
+
+        djnz    103$                                ; process all bits
+
+        ld      b, l                                ; pack result for store
+        ld      a, h
+        ld      sp, ix                              ; tear down frame
+        pop     ix                                  ; restore ix
+        pop     hl                                  ; hl = bcd pointer
+
+        ld      (hl), b                             ; *bcd++ = ones
+        inc     hl
+        ld      (hl), a                             ; tens
+        inc     hl
+        ld      (hl), e                             ; hundreds
+        inc     hl
+        ld      (hl), d                             ; thousands
+        inc     hl
+        ld      (hl), c                             ; ten-thousands
+
+        ret                                         ; done

@@ -1,84 +1,66 @@
-;--------------------------------------------------------------------------
-;  __mulsint2slong.s
-;
-;  Copyright (c) 2021, Philipp Klaus Krause
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; signed 16x16 -> 32 multiply using unsigned core and sign fix
+        ;; takes signed hl and de, multiplies via ___muluint2ulong, negates if needed
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2021 philipp klaus krause
+		
+        .module __mulsint2slong                   ; module name
+        .optsdcc -mz80 sdcccall(1)                ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                             ; code segment
 
-	.module __mulsint2slong
-	.optsdcc -mz80 sdcccall(1)
+        .globl  ___muluint2ulong                  ; import unsigned core
+        .globl  ___mulsint2slong                  ; export symbol
 
-.globl ___muluint2ulong
-.globl ___mulsint2slong
-
-.area _CODE
-
+        ;; ___mulsint2slong
+        ;; inputs:  hl = multiplicand (signed 16-bit)
+        ;;          de = multiplier   (signed 16-bit)
+        ;; outputs: de:hl = product (signed 32-bit, de=low, hl=high)
+        ;; clobbers: a, b, c, d, e, h, l, f
+        ;; notes: lsb of c tracks sign of result; b cached as 0 to help negation
 ___mulsint2slong:
-	; Use lowest bit of c to remember if result needs to be negated. Use b to cache #0.
-	ld	bc, #0
+        ; use lowest bit of c to remember if result needs negation. b = 0.
+        ld      bc, #0                           ; b=0, c=0 (assume positive)
 
-	bit	#7, h
-	jr	z, hl_nonneg
-	ld	a, b
-	sub	a, l
-	ld	l, a
-	ld	a, b
-	sbc	a, h
-	ld	h, a
-	inc	c
+        bit     #7, h                            ; test sign of hl
+        jr      z, hl_nonneg                     ; if non-negative, skip negate
+        ld      a, b                             ; a = 0
+        sub     a, l                             ; l <- -l
+        ld      l, a
+        ld      a, b                             ; a = 0
+        sbc     a, h                             ; h <- -h with borrow
+        ld      h, a
+        inc     c                                ; flip sign flag (c^=1)
 hl_nonneg:
-
-	bit	#7, d
-	jr	z, de_nonneg
-	ld	a, b
-	sub	a, e
-	ld	e, a
-	ld	a, b
-	sbc	a, d
-	ld	d, a
-	inc	c
+        bit     #7, d                            ; test sign of de
+        jr      z, de_nonneg                     ; if non-negative, skip negate
+        ld      a, b                             ; a = 0
+        sub     a, e                             ; e <- -e
+        ld      e, a
+        ld      a, b                             ; a = 0
+        sbc     a, d                             ; d <- -d with borrow
+        ld      d, a
+        inc     c                                ; flip sign flag (c^=1)
 de_nonneg:
+        push    bc                               ; save sign flag (c) and b=0
+        call    ___muluint2ulong                 ; unsigned multiply de:hl
+        pop     bc                               ; restore b=0, c=sign flag
 
-	push	bc
-	call	___muluint2ulong
-	pop	bc
+        bit     #0, c                            ; is result negative?
+        ret     z                                ; no -> done
 
-	bit	#0, c
-	ret	z
-
-	; Negate result.
-	ld	a, b
-	sub	a, e
-	ld	e, a
-	ld	a, b
-	sbc	a, d
-	ld	d, a
-	ld	a, b
-	sbc	a, l
-	ld	l, a
-	ld	a, b
-	sbc	a, h
-	ld	h, a
-	ret
-
+        ; negate 32-bit result in de:hl (two's complement): 0 - (de:hl)
+        ld      a, b                             ; a = 0
+        sub     a, e                             ; e <- -e
+        ld      e, a
+        ld      a, b                             ; a = 0
+        sbc     a, d                             ; d <- -d - carry
+        ld      d, a
+        ld      a, b                             ; a = 0
+        sbc     a, l                             ; l <- -l - carry
+        ld      l, a
+        ld      a, b                             ; a = 0
+        sbc     a, h                             ; h <- -h - carry
+        ld      h, a
+        ret

@@ -1,49 +1,37 @@
-;--------------------------------------------------------------------------
-;  modunsigned.s
-;
-;  Copyright (C) 2009-2010, Philipp Klaus Krause
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; unsigned modulus helpers for 8-bit and 16-bit integers
+        ;; calls unsigned divide helpers and returns the remainder
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2009-2010 philipp klaus krause
+		
+        .module modunsigned                      ; module name
+        .optsdcc -mz80 sdcccall(1)               ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                            ; code segment
 
-	.module modunsigned
-	.optsdcc -mz80 sdcccall(1)
+        .globl  __moduchar                       ; export symbols
+        .globl  __moduint
 
-.area   _CODE
-
-.globl	__moduchar
-.globl	__moduint
-
+        ;; __moduchar
+        ;; inputs:  a = dividend (8-bit), l = divisor (8-bit)
+        ;; outputs: l = dividend % divisor (8-bit remainder)
+        ;; clobbers: a, d, e, h, l, f; uses __divu8
+        ;; notes: arranges (l<-a, e<-orig l), __divu8 yields q in l, r in e;
+        ;;        swap de,hl to return r in l
 __moduchar:
-	ld	e, l
-	ld	l, a
+        ld      e, l                             ; e = divisor (orig l)
+        ld      l, a                             ; l = dividend (from a)
+        call    __divu8                          ; unsigned divide 8-bit
+        ex      de, hl                           ; r in e -> l for return
+        ret                                      ; return remainder in l
 
-	call    __divu8
-	ex	de, hl
-	ret
-
+        ;; __moduint
+        ;; inputs:  hl = dividend (16-bit), de = divisor (16-bit)
+        ;; outputs: hl = dividend % divisor (16-bit remainder)
+        ;; clobbers: a, b, c, d, e, h, l, f; uses __divu16
+        ;; notes: __divu16 yields q in hl, r in de; swap to return r in hl
 __moduint:
-	call    __divu16
-	ex	de, hl
-	ret
-
+        call    __divu16                         ; unsigned divide 16-bit
+        ex      de, hl                           ; place remainder into hl
+        ret                                      ; return remainder in hl

@@ -1,52 +1,34 @@
-;--------------------------------------------------------------------------
-;  __muluint2slong.s
-;
-;  Copyright (c) 2021, Philipp Klaus Krause
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; 16x16 -> 32 unsigned multiply, returns de:hl (low:high)
+        ;; shifts (iy:hl) left; if msb of multiplier set, adds de to low word
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2021 philipp klaus krause
+		
+        .module __muluint2slong                    ; module name
+        .optsdcc -mz80 sdcccall(1)                 ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                              ; code segment
 
-	.module __muluint2slong
-	.optsdcc -mz80 sdcccall(1)
+        .globl  ___muluint2ulong                   ; export symbol
 
-.globl ___muluint2ulong
-
-.area _CODE
-
-; 16x16->32 multiplication
+        ;; ___muluint2ulong
+        ;; inputs:  hl = multiplier (u16), de = multiplicand (u16)
+        ;; outputs: de:hl = product (u32) with de = low, hl = high
+        ;; clobbers: b, iy, h, l, d, e, f
+        ;; notes: uses shift-add algorithm; (iy:hl) holds partial product
 ___muluint2ulong:
-	ld	iy, #0
-	ld	b, #16
+        ld      iy, #0                             ; iy = low 16 of product
+        ld      b, #16                             ; loop over 16 multiplier bits
 loop:
-	add	iy, iy
-	adc	hl, hl
-	jr	NC, skip
-	add	iy, de
-	jr	NC, skip
-	inc	hl
+        add     iy, iy                             ; (iy:hl) <<= 1, start with low
+        adc     hl, hl                             ; then high with carry from iy
+        jr      nc, skip                           ; if msb(multiplier bit) = 0, skip add
+        add     iy, de                             ; add multiplicand to low word
+        jr      nc, skip                           ; if carry into high, bump hl
+        inc     hl                                 ; propagate carry into high word
 skip:
-	djnz	loop
-	push	iy
-	pop	de
-	ret
-
+        djnz    loop                               ; next bit
+        push    iy                                 ; move low word into de
+        pop     de
+        ret                                        ; de:hl = product

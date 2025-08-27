@@ -1,75 +1,49 @@
-;--------------------------------------------------------------------------
-;  mul.s
-;
-;  Copyright (C) 2000, Michael Hope
-;  Copyright (C) 2021, Philipp Klaus Krause
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; 16-bit multiply using shift-and-add with small-operand fast path
+        ;; multiplies bc by de and returns the low 16 bits in de
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2000 michael hope
+        ;; copyright (c) 2021 philipp klaus krause
+        
+        .module mul                               ; module name
+        .optsdcc -mz80 sdcccall(1)                ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                             ; code segment
 
-	.module mul
-	.optsdcc -mz80 sdcccall(1)
+        .globl  __mulint                          ; export symbol
 
-.area   _CODE
-
-.globl	__mulint
-
+        ;; __mulint
+        ;; inputs:  hl = multiplicand (16-bit), de = multiplier (16-bit)
+        ;; outputs: de = product low word (via __mul16)
+        ;; clobbers: a, b, c, h, l, f; preserves de on entry only logically
+        ;; notes: moves hl→bc then calls the core 16-bit multiply
 __mulint:
-        ld	c, l
-        ld	b, h
+        ld      c, l                              ; c = low(multiplicand)
+        ld      b, h                              ; b = high(multiplicand)
 
-	;; 16-bit multiplication
-	;;
-	;; Entry conditions
-	;; bc = multiplicand
-	;; de = multiplier
-	;;
-	;; Exit conditions
-	;; de = less significant word of product
-	;;
-	;; Register used: AF,BC,DE,HL
-__mul16::
-	xor	a,a
-	ld	l,a
-	or	a,b
-	ld	b,#16
+        ;; __mul16
+        ;; inputs:  bc = multiplicand, de = multiplier
+        ;; outputs: de = product low word
+        ;; clobbers: a, b, c, h, l, f
+        ;; notes: classic shift-add loop; fast path when b = 0 (8-bit)
+__mul16:
+        xor     a                                 ; a = 0
+        ld      l, a                              ; l = 0, hl accumulates sum
+        or      a, b                              ; set z if high byte of bc = 0
+        ld      b, #16                            ; loop count = 16 bits by default
+        jr      nz, 2$                            ; if high byte nonzero, use 16-bit path
 
-        ;; Optimise for the case when this side has 8 bits of data or
-        ;; less.  This is often the case with support address calls.
-        jr      NZ,2$
-        ld      b,#8
-        ld      a,c
+        ld      b, #8                             ; fast path: only 8 bits in c
+        ld      a, c                              ; preload a with c for rla
 1$:
-        ;; Taken from z88dk, which originally borrowed from the
-        ;; Spectrum rom.
-        add     hl,hl
+        add     hl, hl                            ; shift partial sum left
 2$:
-        rl      c
-        rla                     ;DLE 27/11/98
-        jr      NC,3$
-        add     hl,de
+        rl      c                                 ; shift next bit of c into carry
+        rla                                       ; shift a as well (fast path helper)
+        jr      nc, 3$                            ; if bit was 0, skip add
+        add     hl, de                            ; add multiplier to partial sum
 3$:
-        djnz    1$
-        ex	de, hl
-        ret
-
+        djnz    1$                                ; loop over all bits
+        ex      de, hl                            ; move result low word to de
+        ret                                       ; return with de = product low

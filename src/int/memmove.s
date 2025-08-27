@@ -1,65 +1,53 @@
-;--------------------------------------------------------------------------
-;  memmove.s
-;
-;  Copyright (C) 2008-2021, Philipp Klaus Krause, Marco Bodrato
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; memory move with overlap handling (like standard memmove)
+        ;; copies n bytes from src to dst, safely supporting overlap
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2008-2021 philipp klaus krause, marco bodrato
+		
+        .module memmove                           ; module name
+        .optsdcc -mz80 sdcccall(1)                ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                             ; code segment
 
-	.module memmove
-	.optsdcc -mz80 sdcccall(1)
+        .globl  _memmove                          ; export symbol
 
-        .area   _CODE
-
-	.globl _memmove
-
-; The Z80 has the ldir and lddr instructions, which are perfect for implementing memmove().
-
+        ;; _memmove
+        ;; inputs (sdcccall convention):
+        ;;   hl = destination pointer
+        ;;   de = source pointer
+        ;;   bc = length
+        ;; outputs:
+        ;;   de = original destination (returned to caller)
+        ;; clobbers: a, bc, de, hl, iy, f
+        ;; notes: decides copy direction depending on overlap, then
+        ;;        uses ldir (forward) or lddr (backward)
 _memmove:
-	pop	iy
-	pop	bc
-	ld	a, c
-	or	a, b
-	ex	de, hl
-	jr	Z, end
-	ex	de, hl
-	push	hl
-	sbc	hl, de		; or above cleared carry.
-	add	hl, de		; same carry as the line before
-	jr	C, memmove_up
-memmove_down:
-	dec	bc
-	add	hl, bc
-	ex      de, hl
-	add	hl, bc
-	inc	bc
-	lddr
-	pop	de
-end:
-	jp	(iy)
-memmove_up:
-	ex      de, hl
-	ldir
-	pop	de
-	jp	(iy)
+        pop     iy                               ; return address to iy
+        pop     bc                               ; bc = length
+        ld      a, c                             ; test length
+        or      a, b                             ; z if bc == 0
+        ex      de, hl                           ; swap hl <-> de
+        jr      z, end                           ; if zero length, done
+        ex      de, hl                           ; restore hl=dst, de=src
+        push    hl                               ; save dst on stack
+        sbc     hl, de                           ; hl - de (carry unchanged)
+        add     hl, de                           ; restore hl, carry preserved
+        jr      c, memmove_up                    ; if dst<src, copy upwards
 
+memmove_down:
+        dec     bc                               ; adjust bc for block end
+        add     hl, bc                           ; hl = dst+len-1
+        ex      de, hl                           ; de = dst+len-1, hl = src
+        add     hl, bc                           ; hl = src+len-1
+        inc     bc                               ; restore bc
+        lddr                                    ; copy backwards
+        pop     de                               ; restore original dst
+end:
+        jp      (iy)                             ; return
+
+memmove_up:
+        ex      de, hl                           ; swap: hl = src, de = dst
+        ldir                                    ; copy forwards
+        pop     de                               ; restore original dst
+        jp      (iy)                             ; return

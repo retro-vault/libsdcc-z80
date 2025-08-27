@@ -1,71 +1,55 @@
-;--------------------------------------------------------------------------
-;  mulchar.s
-;
-;  Copyright (c) 2017-2021, Philipp Klaus Krause
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; multiplication shims for signed/unsigned 8×8→16 bit
+        ;; prepares operands in bc and de, then calls __mul16
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2017-2021 philipp klaus krause
+        
+        .module mulchar                          ; module name
+        .optsdcc -mz80 sdcccall(1)               ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                            ; code segment
 
-	.module mulchar
-	.optsdcc -mz80 sdcccall(1)
+        .globl  __mulsuchar                      ; export symbols
+        .globl  __muluschar
+        .globl  __mulschar
 
-.area   _CODE
-
-; unsigned char x unsigned char multiplication is done by code generation.
-
-.globl	__mulsuchar
-.globl	__muluschar
-.globl	__mulschar
-
-; operands have different sign
-
+        ;; __muluschar
+        ;; inputs:  a = unsigned lhs, l = signed rhs
+        ;; outputs: hl = 16-bit product (via __mul16)
+        ;; clobbers: a, b, c, d, e, f; plus any clobbers from __mul16
+        ;; notes: builds bc and de as signed 16-bit operands
 __muluschar:
-	ld	e, a
-	ld	c, l
-	ld	b, #0
+        ld      e, a                             ; e = a (temp reuse below)
+        ld      c, l                             ; c = l (signed factor)
+        ld      b, #0                            ; b = 0 (zero-extend unsigned)
+        jr      signexte                         ; go sign-extend e into d
 
-        jr      signexte
-
+        ;; __mulsuchar
+        ;; inputs:  a = signed lhs, l = unsigned rhs
+        ;; outputs: hl = 16-bit product (via __mul16)
+        ;; clobbers: a, b, c, d, e, f; plus any clobbers from __mul16
+        ;; notes: builds bc signed, de unsigned
 __mulsuchar:
-	ld	c, a
-	ld	b, #0
-	ld	e, l
+        ld      c, a                             ; c = a (signed factor)
+        ld      b, #0                            ; b = 0 for now
+        ld      e, l                             ; e = l (unsigned factor)
+        jr      signexte                         ; shared sign-extension path
 
-        jr      signexte
-
+        ;; __mulschar
+        ;; inputs:  a = signed lhs, l = signed rhs
+        ;; outputs: hl = 16-bit product (via __mul16)
+        ;; clobbers: a, b, c, d, e, f; plus any clobbers from __mul16
+        ;; notes: sign-extends both operands into bc and de
 __mulschar:
-        ld      e, l
-        ld      c, a
-
-        ;; Need to sign extend before going in.
-        rla
-        sbc     a, a
-        ld      b, a
+        ld      e, l                             ; e = l (right factor)
+        ld      c, a                             ; c = a (left factor)
+        rla                                      ; carry = sign(a)
+        sbc     a, a                             ; a = 00/ff by sign(a)
+        ld      b, a                             ; b = sign(a)
 signexte:
-        ld      a, e
-        rla
-        sbc     a, a
-        ld      d, a
-
-        jp      __mul16
-
+        ld      a, e                             ; a = e for sign test
+        rla                                      ; carry = sign(e)
+        sbc     a, a                             ; a = 00/ff by sign(e)
+        ld      d, a                             ; d = sign(e)
+        jp      __mul16                          ; (bc) × (de) → hl

@@ -1,0 +1,18 @@
+This library is extracted from the SDCC project and redistributed
+under the GNU General Public License v2 (or later), with the SDCC
+linking exception (see LICENSE).
+
+As a special exception, if you link this library with other files,
+some of which are compiled with SDCC, to produce an executable,
+this library does not by itself cause the resulting executable to
+be covered by the GNU General Public License. This exception does
+not however invalidate any other reasons why the executable file
+might be covered by the GNU General Public License.
+
+Copyright holders:
+
+- Philipp Klaus Krause, 2008–2021
+- Michael Hope, 2000–2021
+- Marco Bodrato, 2008–2021
+- Maarten Brock, 2011
+- Sergey Belyashov, 2020–2021

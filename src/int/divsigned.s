@@ -1,127 +1,110 @@
-;--------------------------------------------------------------------------
-;  divsigned.s
-;
-;  Copyright (C) 2000-2021, Michael Hope, Philipp Klaus Krause
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; signed division helpers (8 and 16 bit), with remainder fixup
+        ;; builds signed operands, divides via __divu16, fixes signs
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2000-2021 michael hope, philipp klaus krause
+        
+        .module divsigned                          ; module name
+        .optsdcc -mz80 sdcccall(1)                 ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                              ; code segment
 
-	.module divsigned
-	.optsdcc -mz80 sdcccall(1)
+        .globl  __divsint                          ; export symbols
+        .globl  __divschar
 
-.area	_CODE
-
-.globl	__divsint
-.globl	__divschar
-
+        ;; __divschar
+        ;; inputs:  a = dividend (signed 8-bit), l = divisor (signed 8-bit)
+        ;; outputs: de = quotient (signed 16-bit), hl = remainder (signed 16-bit)
+        ;; clobbers: a, b, d, e, h, l, f; falls into __div8 / __div_signexte
+        ;; notes: sign-extends both args into hl and de, then uses 16-bit core
 __divschar:
-	ld	e, l
-	ld	l, a
+        ld      e, l                              ; e = divisor (orig l)
+        ld      l, a                              ; l = dividend low
 
-__div8::
-        ld      a, l            ; Sign extend
-        rlca
-        sbc     a,a
-        ld      h, a
-__div_signexte::
-	ld      a, e            ; Sign extend
-	rlca
-	sbc     a, a
-	ld      d, a
-	; Fall through to __div16
+        ;; __div8
+        ;; inputs:  hl low contains dividend byte
+        ;; action:  sign-extend dividend into h
+__div8:
+        ld      a, l                              ; prepare sign of dividend
+        rlca                                     ; sign bit into carry
+        sbc     a, a                             ; a = 00 or ff
+        ld      h, a                             ; h = sign(dividend)
 
-        ;; signed 16-bit division
-        ;;
-        ;; Entry conditions
-        ;;   HL = dividend
-        ;;   DE = divisor
-        ;;
-        ;; Exit conditions
-        ;;   DE = quotient
-        ;;   HL = remainder
-        ;;
-        ;; Register used: AF,B,DE,HL
+        ;; __div_signexte
+        ;; inputs:  e contains divisor byte
+        ;; action:  sign-extend divisor into d, then fall to __div16
+__div_signexte:
+        ld      a, e                              ; prepare sign of divisor
+        rlca                                     ; sign bit into carry
+        sbc     a, a                             ; a = 00 or ff
+        ld      d, a                             ; d = sign(divisor)
+        ;; fall through to __div16
+
+        ;; __divsint / __div16
+        ;; inputs:  hl = dividend (signed 16-bit), de = divisor (signed 16-bit)
+        ;; outputs: de = quotient (signed 16-bit), hl = remainder (signed 16-bit)
+        ;; clobbers: a, b, d, e, h, l, f
+        ;; notes: take abs values, do unsigned divide, then fix signs
 __divsint:
-__div16::
-        ;; Determine sign of quotient by xor-ing high bytes of dividend
-        ;;  and divisor. Quotient is positive if signs are the same, negative
-        ;;  if signs are different
-        ;; Remainder has same sign as dividend
-        ld      a, h            ; Get high byte of dividend
-        xor     a, d            ; Xor with high byte of divisor
-        rla                     ; Sign of quotient goes into the carry
-        ld      a, h            ; Get high byte of dividend
-        push    af              ; Save sign of both quotient and reminder
+__div16:
+        ld      a, h                              ; get high byte of dividend
+        xor     a, d                              ; xor with high byte of divisor
+        rla                                       ; carry = sign(quotient)
+        ld      a, h                              ; restore high(dividend)
+        push    af                                ; save quotient sign and div sign
 
-        ; Take absolute value of dividend
-        rla
-        jr      NC, .chkde      ; Jump if dividend is positive
-        sub     a, a            ; Subtract dividend from 0
-        sub     a, l
-        ld      l, a
-        sbc     a, a            ; Propagate borrow (A=0xFF if borrow)
-        sub     a, h
-        ld      h, a
+        ; take absolute value of dividend
+        rla                                       ; test sign(dividend)
+        jr      nc, .chkde                        ; if positive, skip negate
+        sub     a, a                              ; a = 0
+        sub     a, l                              ; a = -low
+        ld      l, a                              ; l = -low
+        sbc     a, a                              ; a = ff if borrow
+        sub     a, h                              ; a = -high - borrow
+        ld      h, a                              ; h = -high
 
-        ; Take absolute value of divisor
+        ; take absolute value of divisor
 .chkde:
-        bit     7, d
-        jr      Z, .dodiv       ; Jump if divisor is positive
-        sub     a, a            ; Subtract divisor from 0
-        sub     a, e
-        ld      e, a
-        sbc     a, a            ; Propagate borrow (A=0xFF if borrow)
-        sub     a, d
-        ld      d, a
+        bit     7, d                              ; test sign(divisor)
+        jr      z, .dodiv                         ; if positive, skip negate
+        sub     a, a                              ; a = 0
+        sub     a, e                              ; a = -low
+        ld      e, a                              ; e = -low
+        sbc     a, a                              ; a = ff if borrow
+        sub     a, d                              ; a = -high - borrow
+        ld      d, a                              ; d = -high
 
-        ; Divide absolute values
+        ; divide absolute values (unsigned core)
 .dodiv:
-        call    __divu16
+        call    __divu16                          ; de = q (unsigned), hl = r
 
 .fix_quotient:
-        ; Negate quotient if it is negative
-        pop     af              ; recover sign of quotient
-        ret	NC		; Jump if quotient is positive
-        ld      b, a
-        sub     a, a            ; Subtract quotient from 0
-        sub     a, e
-        ld      e, a
-        sbc     a, a            ; Propagate borrow (A=0xFF if borrow)
-        sub     a, d
-        ld      d, a
-        ld      a, b
-	ret
-
-__get_remainder::
-        ; Negate remainder if it is negative.
-        rla
-        ex	de, hl
-        ret     NC              ; Return if remainder is positive
-        sub     a, a            ; Subtract quotient from 0
-        sub     a, e
-        ld      e, a
-        sbc     a, a            ; Propagate borrow (A=0xFF if borrow)
-        sub     a, d
-        ld      d, a
+        ; negate quotient if it should be negative
+        pop     af                                ; recover quotient sign
+        ret     nc                                ; if positive, done
+        ld      b, a                              ; save a
+        sub     a, a                              ; a = 0
+        sub     a, e                              ; a = -low(q)
+        ld      e, a                              ; e = low(q) negated
+        sbc     a, a                              ; a = ff if borrow
+        sub     a, d                              ; a = -high(q) - borrow
+        ld      d, a                              ; d = high(q) negated
+        ld      a, b                              ; restore a
         ret
 
+        ;; __get_remainder
+        ;; inputs:  carry encodes sign(dividend) from prior rla
+        ;; outputs: hl = remainder (signed 16-bit, sign matches dividend)
+        ;; clobbers: a, d, e, f; de used as temp
+__get_remainder:
+        rla                                       ; carry -> sign(remainder?)
+        ex      de, hl                            ; work on remainder in de
+        ret     nc                                ; if positive, done
+        sub     a, a                              ; a = 0
+        sub     a, e                              ; a = -low(r)
+        ld      e, a                              ; e = low(r) negated
+        sbc     a, a                              ; a = ff if borrow
+        sub     a, d                              ; a = -high(r) - borrow
+        ld      d, a                              ; d = high(r) negated
+        ret

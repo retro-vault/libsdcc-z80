@@ -1,54 +1,43 @@
-;--------------------------------------------------------------------------
-;  __sdcc_critical.s
-;
-;  Copyright (C) 2020, Sergey Belyashov
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License 
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; enter critical section with previous iffy state encoded in flags
+        ;; disables interrupts and returns with p/v flag = 1 if interrupts
+        ;; were enabled on entry, or p/v = 0 if they were already disabled
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2020 sergey belyashov
+		
+        .module __sdcc_critical                    ; module name
+        .area   _CODE                              ; code segment
 
-	.area   _CODE
+        .globl  ___sdcc_critical_enter             ; export symbol
 
-	.globl ___sdcc_critical_enter
-;
-; NMOS Z80 compatible
-; this function cannot be placed at 0x0000...0x00ff addresses
-;
-___sdcc_critical_enter::
-	xor	a, a
-	push	af
-	pop	af
-	ld	a, i
-	di
-	ret	pe	;enabled interrupts
-	dec	sp
-	dec	sp
-	pop	af
-	or	a, a	;A = 0 if interrupts disabled
-	jr	NZ, 00100$
-;interrupts disabled
-	sub	a, a	;force P/V = 0
-	ret
-;interrupts enabled
+        ;; ___sdcc_critical_enter
+        ;; inputs:  none
+        ;; outputs: interrupts disabled on return;
+        ;;          a = 0; p/v flag = 1 if ints were enabled on entry,
+        ;;          p/v flag = 0 if ints were disabled on entry
+        ;; clobbers: a, f, i; touches sp, preserves all other regs
+        ;; notes: nmOS z80 compatible; must not be placed at 0x0000..0x00ff
+___sdcc_critical_enter:
+        xor     a                                  ; a = 0 (clear), also z=1
+        push    af                                 ; dummy push to keep stack flow
+        pop     af                                 ; and restore
+        ld      a, i                               ; load i; pe parity mirrors iff2
+        di                                         ; disable interrupts now
+        ret     pe                                 ; if iff2 was 1 -> return, p/v=1
+
+        dec     sp                                 ; adjust return address on stack
+        dec     sp                                 ; (matches early return path)
+        pop     af                                 ; retrieve saved flags into af
+        or      a                                  ; set flags from a (z unchanged)
+        jr      nz, 00100$                         ; if nz, take "interrupts enabled" path
+
+        ; interrupts were disabled on entry
+        sub     a, a                               ; a = 0, force p/v = 0
+        ret
+
 00100$:
-	xor	a, a	;force P/V = 1
-	ret
+        ; interrupts were enabled on entry
+        xor     a                                  ; a = 0, force p/v = 1
+        ret

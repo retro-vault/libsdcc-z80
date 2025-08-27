@@ -1,49 +1,38 @@
-;--------------------------------------------------------------------------
-;  modsigned.s
-;
-;  Copyright (C) 2009-2021, Philipp Klaus Krause
-;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
-;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
-;
-;  You should have received a copy of the GNU General Public License
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
-;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+        ;; signed modulus helpers for 8-bit and 16-bit integers
+        ;; uses signed divide helpers and normalizes the remainder sign
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2009-2021 philipp klaus krause
+		
+        .module modsigned                         ; module name
+        .optsdcc -mz80 sdcccall(1)                ; sdcc z80, sdcccall(1) abi
+        .area   _CODE                             ; code segment
 
-	.module modsigned
-	.optsdcc -mz80 sdcccall(1)
+        .globl  __modschar                        ; export symbols
+        .globl  __modsint
 
-.area   _CODE
-
-.globl	__modschar
-.globl	__modsint
-
+        ;; __modschar
+        ;; inputs:  a = dividend (signed 8-bit), l = divisor (signed 8-bit)
+        ;; outputs: l = dividend % divisor (signed 8-bit remainder)
+        ;; clobbers: a, d, e, h, l, f; plus any clobbers from __div8 /
+        ;;           __get_remainder
+        ;; notes: arrange params (l<-a, e<-orig l), call __div8, then
+        ;;        tail-jump to __get_remainder which adjusts remainder sign
 __modschar:
-	ld	e, l
-	ld	l, a
+        ld      e, l                              ; e = divisor (orig l)
+        ld      l, a                              ; l = dividend (from a)
+        call    __div8                            ; signed divide 8-bit
+        jp      __get_remainder                   ; finalize remainder in l
 
-	call    __div8
-
-	jp	__get_remainder
-
+        ;; __modsint
+        ;; inputs:  hl = dividend (signed 16-bit), de = divisor (signed 16-bit)
+        ;; outputs: hl = dividend % divisor (signed 16-bit remainder)
+        ;; clobbers: a, b, c, d, e, h, l, f; plus any clobbers from __div16 /
+        ;;           __get_remainder
+        ;; notes: __div16 produces quotient/remainder; __get_remainder
+        ;;        returns properly signed remainder in hl
 __modsint:
-	call    __div16
-
-	jp	__get_remainder
-
+        call    __div16                           ; signed divide 16-bit
+        jp      __get_remainder                   ; finalize remainder in hl
