@@ -7,7 +7,8 @@
         ;; copyright (c) 2009-2010 philipp klaus krause
 		
         .module modunsigned                      ; module name
-        .optsdcc -mz80 sdcccall(1)               ; sdcc z80, sdcccall(1) abi
+        .optsdcc -mz80 sdcccall(1)
+        
         .area   _CODE                            ; code segment
 
         .globl  __moduchar                       ; export symbols

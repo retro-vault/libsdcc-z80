@@ -9,7 +9,8 @@
         ;; marco bodrato
         
         .module divunsigned                       ; module name
-        .optsdcc -mz80 sdcccall(1)                ; sdcc z80, sdcccall(1) abi
+        .optsdcc -mz80 sdcccall(1)
+
         .area   _CODE                             ; code segment
 
         .globl  __divuint                         ; export symbols
@@ -24,7 +25,7 @@ __divuchar:
         ld      e, l                              ; e = divisor (orig l)
         ld      l, a                              ; l = dividend (from a)
         ;; fall through to 8-bit unsigned divide core
-__divu8:
+__divu8::
         ld      h, #0x00                          ; hl = dividend (zero-extend)
         ld      d, h                              ; de = divisor (zero-extend)
         ;; fall through to __divu16
@@ -35,7 +36,7 @@ __divu8:
         ;; clobbers: a, b, d, e, h, l, f
         ;; notes: chooses fast path when divisor < 2^7, else wide path
 __divuint:
-__divu16:
+__divu16::
         ld      a, e                              ; test high bit of divisor
         and     a, #0x80                          ; keep bit7 of e
         or      a, d                              ; or high byte d

@@ -10,26 +10,35 @@ WORKDIR      := $(PWD)
 DOCKER_RUN = docker run --rm -v "$(WORKDIR):/work" -w /work $(DOCKER_IMAGE) \
              env PATH=/opt/sdcc/bin:$$PATH
 
-# Top level targets.
-all: $(TARGET)
+# Default: build lib then run link-only tests
+all: $(TARGET) check
 
 docker-image:
 	@echo "[host] building docker image $(DOCKER_IMAGE) ..."
 	@docker build -f $(DOCKERFILE) -t $(DOCKER_IMAGE) .
 
-# Build TAP inside Docker using src/Makefile (artifacts go to ./build)
+# Build library inside Docker using src/Makefile (artifacts -> ./build & ./bin)
 $(TARGET): docker-image
-	@echo "[host] building (inside docker) -> build/$(TARGET).lib"
+	@echo "[host] building (inside docker) -> bin/$(TARGET).lib"
 	@$(DOCKER_RUN) sh -c 'make -C src TARGET=$(TARGET) all'
+
+# Run link-only tests inside Docker after building the library
+check: $(TARGET)
+	@echo "[host] running link checks (inside docker) against bin/$(TARGET).lib"
+	@$(DOCKER_RUN) sh -c 'make -C test LIB=../bin/$(TARGET).lib all'
 
 build: $(TARGET)
 
 rebuild:
 	@$(DOCKER_RUN) sh -c 'make -C src clean'
-	@$(MAKE) $(TARGET)
+	@$(MAKE) all
 
 clean:
 	@echo "[host] removing ./build"
 	@rm -rf build
 
-.PHONY: all docker-image $(TARGET) build rebuild clean
+distclean: clean
+	@echo "[host] removing ./bin"
+	@rm -rf bin
+
+.PHONY: all docker-image $(TARGET) build rebuild clean distclean check

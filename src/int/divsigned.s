@@ -7,7 +7,8 @@
         ;; copyright (c) 2000-2021 michael hope, philipp klaus krause
         
         .module divsigned                          ; module name
-        .optsdcc -mz80 sdcccall(1)                 ; sdcc z80, sdcccall(1) abi
+        .optsdcc -mz80 sdcccall(1)
+
         .area   _CODE                              ; code segment
 
         .globl  __divsint                          ; export symbols
@@ -25,7 +26,7 @@ __divschar:
         ;; __div8
         ;; inputs:  hl low contains dividend byte
         ;; action:  sign-extend dividend into h
-__div8:
+__div8::
         ld      a, l                              ; prepare sign of dividend
         rlca                                     ; sign bit into carry
         sbc     a, a                             ; a = 00 or ff
@@ -47,7 +48,7 @@ __div_signexte:
         ;; clobbers: a, b, d, e, h, l, f
         ;; notes: take abs values, do unsigned divide, then fix signs
 __divsint:
-__div16:
+__div16::
         ld      a, h                              ; get high byte of dividend
         xor     a, d                              ; xor with high byte of divisor
         rla                                       ; carry = sign(quotient)
@@ -97,7 +98,7 @@ __div16:
         ;; inputs:  carry encodes sign(dividend) from prior rla
         ;; outputs: hl = remainder (signed 16-bit, sign matches dividend)
         ;; clobbers: a, d, e, f; de used as temp
-__get_remainder:
+__get_remainder::
         rla                                       ; carry -> sign(remainder?)
         ex      de, hl                            ; work on remainder in de
         ret     nc                                ; if positive, done
