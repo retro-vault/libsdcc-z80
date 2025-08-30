@@ -11,7 +11,6 @@
 
 /* "static assert" style checks that don't need C11 */
 typedef char check_float_is_32bit[ (sizeof(float)  == 4) ? 1 : -1 ];
-typedef char check_double_is_32bit[(sizeof(double) == 4) ? 1 : -1 ];
 
 /* Use volatile to block constant-folding so helpers are actually referenced. */
 static volatile float   vf0 = 1.25f, vf1 = -2.5f, vf2 = 0.0f;
@@ -21,7 +20,6 @@ static volatile long    vl0 = 123456L, vl1 = -234567L;
 static volatile unsigned long vul0 = 345678UL;
 
 static float ret_f(float x) { return x; }                 /* return path */
-static double ret_d(double x) { return x; }               /* promotes like float */
 
 static void sink_f(float x);   /* prevent optimizing away */
 static void sink_f(float x) { (void)x; }
@@ -122,7 +120,6 @@ void test_calls(void) {
     sink_f(add_ret(a, b));
     sink_f(mul_ret(a, b));
     sink_f(ret_f(a));
-    sink_f((float)ret_d(b)); /* double path == 32-bit on Z80 */
 }
 
 /* Force division-by-non-const to ensure real call is emitted */

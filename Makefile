@@ -36,9 +36,6 @@ rebuild:
 clean:
 	@echo "[host] removing ./build"
 	@rm -rf build
-
-distclean: clean
-	@echo "[host] removing ./bin"
 	@rm -rf bin
 
-.PHONY: all docker-image $(TARGET) build rebuild clean distclean check
+.PHONY: all docker-image $(TARGET) build rebuild clean check
