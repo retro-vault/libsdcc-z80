@@ -24,7 +24,7 @@ $(TARGET): docker-image
 
 # Run link-only tests inside Docker after building the library
 check: $(TARGET)
-	@echo "[host] running link checks (inside docker) against bin/$(TARGET).lib"
+	@echo "[host] running link checks (inside docker) against bin/$(TARGET).lib"#
 	@$(DOCKER_RUN) sh -c 'make -C test LIB=../bin/$(TARGET).lib all'
 
 build: $(TARGET)
@@ -34,7 +34,7 @@ rebuild:
 	@$(MAKE) all
 
 clean:
-	@echo "[host] removing ./build"
+	@echo "[host] removing ./build amd ./bin"
 	@rm -rf build
 	@rm -rf bin
 

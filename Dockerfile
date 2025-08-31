@@ -6,11 +6,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /opt
 
-# Base tools + Fuse (GTK). Swap to fuse-emulator-sdl if you prefer SDL.
+# Base tools, Fuse, and build deps (for bin2tap)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget xz-utils bzip2 make git python3 \
-    fuse-emulator-gtk fuse-emulator-utils pasmo which \
+    ca-certificates wget xz-utils bzip2 make git python3 which \
+    gcc build-essential \
+    fuse-emulator-gtk fuse-emulator-utils \
  && rm -rf /var/lib/apt/lists/*
+
+# Build & install bin2tap from source
+RUN git clone --depth=1 https://github.com/compilersoftware/bin2tap.git /opt/bin2tap \
+ && make -C /opt/bin2tap \
+ && install -m 0755 /opt/bin2tap/bin2tap /usr/local/bin/bin2tap \
+ && rm -rf /opt/bin2tap
 
 # Download SDCC prebuilt tarball
 RUN wget -O /tmp/sdcc.tar.bz2 \
