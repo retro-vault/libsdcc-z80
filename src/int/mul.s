@@ -8,7 +8,7 @@
         ;; copyright (c) 2021 philipp klaus krause
         
         .module mul                               ; module name
-        .optsdcc -mz80 sdcccall(1)                ; sdcc z80, sdcccall(1) abi
+        .optsdcc -mz80 sdcccall(1)
         .area   _CODE                             ; code segment
 
         .globl  __mulint                          ; export symbol

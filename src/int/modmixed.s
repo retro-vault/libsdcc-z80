@@ -7,7 +7,7 @@
         ;; copyright (c) 2010-2021 philipp klaus krause
 		
         .module modmixed                          ; module name
-        .optsdcc -mz80 sdcccall(1)                ; sdcc z80, sdcccall(1) abi
+        .optsdcc -mz80 sdcccall(1)
 
         .globl  __modsuchar                       ; export symbols
         .globl  __moduschar

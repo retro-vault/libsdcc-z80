@@ -1,6 +1,3 @@
-# Targets.
-TARGET ?= libsdcc-z80
-
 # Docker settings.
 DOCKER_IMAGE ?= sdcc-env:latest
 DOCKERFILE   ?= Dockerfile
@@ -11,31 +8,21 @@ DOCKER_RUN = docker run --rm -v "$(WORKDIR):/work" -w /work $(DOCKER_IMAGE) \
              env PATH=/opt/sdcc/bin:$$PATH
 
 # Default: build lib then run link-only tests
-all: $(TARGET) check
+all: tests
+	
 
-docker-image:
-	@echo "[host] building docker image $(DOCKER_IMAGE) ..."
-	@docker build -f $(DOCKERFILE) -t $(DOCKER_IMAGE) .
+tests: docker-image lib
+	$(DOCKER_RUN) sh -c 'make -C test all'
 
 # Build library inside Docker using src/Makefile (artifacts -> ./build & ./bin)
-$(TARGET): docker-image
-	@echo "[host] building (inside docker) -> bin/$(TARGET).lib"
-	@$(DOCKER_RUN) sh -c 'make -C src TARGET=$(TARGET) all'
+lib: 
+	$(DOCKER_RUN) sh -c 'make -C src all'
 
-# Run link-only tests inside Docker after building the library
-check: $(TARGET)
-	@echo "[host] running link checks (inside docker) against bin/$(TARGET).lib"#
-	@$(DOCKER_RUN) sh -c 'make -C test LIB=../bin/$(TARGET).lib all'
-
-build: $(TARGET)
-
-rebuild:
-	@$(DOCKER_RUN) sh -c 'make -C src clean'
-	@$(MAKE) all
+docker-image:
+	docker build -f $(DOCKERFILE) -t $(DOCKER_IMAGE) .
 
 clean:
-	@echo "[host] removing ./build amd ./bin"
-	@rm -rf build
-	@rm -rf bin
+	rm -rf build
+	rm -rf bin
 
-.PHONY: all docker-image $(TARGET) build rebuild clean check
+.PHONY: all docker-image tests lib clean

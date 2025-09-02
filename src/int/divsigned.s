@@ -35,7 +35,7 @@ __div8::
         ;; __div_signexte
         ;; inputs:  e contains divisor byte
         ;; action:  sign-extend divisor into d, then fall to __div16
-__div_signexte:
+__div_signexte::
         ld      a, e                              ; prepare sign of divisor
         rlca                                     ; sign bit into carry
         sbc     a, a                             ; a = 00 or ff

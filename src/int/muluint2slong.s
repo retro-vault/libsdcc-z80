@@ -7,7 +7,7 @@
         ;; copyright (c) 2021 philipp klaus krause
 		
         .module __muluint2slong                    ; module name
-        .optsdcc -mz80 sdcccall(1)                 ; sdcc z80, sdcccall(1) abi
+        .optsdcc -mz80 sdcccall(1)
         .area   _CODE                              ; code segment
 
         .globl  ___muluint2ulong                   ; export symbol

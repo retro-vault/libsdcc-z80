@@ -1,88 +1,87 @@
-# -------- test/execute/Makefile (ZX Spectrum exec + TAP via bin2tap) --------
+# -------- test/execute/Makefile (ZX Spectrum exec + absolute .lk + TAP) --------
 
-TOP     := $(abspath $(CURDIR)/../..)
-OUT     := $(TOP)/build/test/execute
-BIN     := $(TOP)/bin
-LIB     := libsdcc-z80
+ROOT        := $(abspath $(CURDIR)/../..)
+SRC_DIR     := .
+BUILD_DIR   := $(ROOT)/build/test/execute
+BIN_DIR     := $(ROOT)/bin
 
-# ZX params
-ZX_ADDR := 32768              # 0x8000
-ZX_NAME := test               # TAP filename inside header
+TARGET      := test
+OUT_BASE    := $(BUILD_DIR)/$(TARGET)
 
-# tools
-CC      := sdcc
-AS      := sdasz80
-OBJCOPY := sdobjcopy
-BIN2TAP := bin2tap            # from fuse-emulator-utils
+LOAD_ADDR_HEX ?= 0x8000
+LOAD_ADDR_DEC ?= 32768
 
-# compile / link flags
-CFLAGS  := --std-c11 -mz80 --debug \
-           --no-std-crt0 --nostdinc --nostdlib \
-           -I. -Izx -I$(TOP)/include
-ASFLAGS := -plosgff
-LDFLAGS := -mz80 --no-std-crt0 --nostdlib --nostdinc \
-           -Wl -b_CODE=0x8000 -Wl -b_DATA=0x9000 -Wl -b_BSS=0x9800 \
-           -Wl -y \
-           $(addprefix -L,$(BIN)) -l$(LIB) -p
+# Library (use absolute full path; no -l)
+LIB_NAME   := libsdcc-z80.lib
+LIB_PATH   := $(abspath $(BIN_DIR))/$(LIB_NAME)
 
-# sources (this dir and optional zx/)
-S_SRCS  := $(filter-out crt0_zx.s,$(wildcard *.s)) $(wildcard zx/*.s)
-C_SRCS  := $(wildcard *.c) $(wildcard zx/*.c)
+CC       := sdcc
+AS       := sdasz80
+LD       := sdldz80
+OBJCOPY  := sdobjcopy
+BIN2TAP  := bin2tap
 
-# objects (mirror subdirs under OUT)
-S_OBJS  := $(patsubst %.s,$(OUT)/%.rel,$(S_SRCS))
-C_OBJS  := $(patsubst %.c,$(OUT)/%.rel,$(C_SRCS))
-OBJS    := $(S_OBJS) $(C_OBJS)
+CFLAGS   := --std-c11 -mz80 --debug \
+            --no-std-crt0 --nostdinc --nostdlib \
+            -I. -Izx -I$(ROOT)/include
+ASFLAGS  := -plosgff
 
-CRT0    := $(OUT)/crt0_zx.rel
-IHX     := $(OUT)/test.ihx
-BINOUT  := $(OUT)/test.bin
-# final TAP goes in bin/
-TAP     := $(BIN)/test.tap
+CRT0_SRC := $(firstword $(wildcard $(SRC_DIR)/crt0*.s))
+CRT0_OBJ := $(abspath $(patsubst $(SRC_DIR)/%.s,$(BUILD_DIR)/%.rel,$(CRT0_SRC)))
+
+S_SRCS   := $(filter-out $(CRT0_SRC), $(wildcard $(SRC_DIR)/*.s) $(wildcard $(SRC_DIR)/zx/*.s))
+C_SRCS   := $(wildcard $(SRC_DIR)/*.c)  $(wildcard $(SRC_DIR)/zx/*.c)
+
+S_OBJS   := $(abspath $(patsubst $(SRC_DIR)/%.s,$(BUILD_DIR)/%.rel,$(S_SRCS)))
+C_OBJS   := $(abspath $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.rel,$(C_SRCS)))
+OBJS     := $(S_OBJS) $(C_OBJS)
+
+IHX      := $(abspath $(OUT_BASE).ihx)
+BIN      := $(abspath $(OUT_BASE).bin)
+LINKFK   := $(abspath $(OUT_BASE).lk)
+TAP      := $(abspath $(BIN_DIR)/$(TARGET).tap)
 
 .PHONY: all clean
-
 all: $(TAP)
-	@echo "ZX exec ready: $(notdir $(BINOUT))  $(notdir $(TAP))"
 
-# --- assemble crt0 first (note: -o before input for sdasz80) ---
-$(CRT0): crt0_zx.s
-	@mkdir -p $(dir $@)
-	@echo "[as] $< -> $@"
-	$(AS) $(ASFLAGS) -o $@ $<
+# --- link via generated .lk (ALL ABSOLUTE PATHS; no -l) ---
+$(IHX): $(CRT0_OBJ) $(OBJS)
+	mkdir -p $(BUILD_DIR)
+	{ \
+	  echo "-b_CODE=$(LOAD_ADDR_HEX)"; \
+	  echo "-i"; \
+	  echo "-m"; \
+	  echo "-j"; \
+	  echo "-o $(IHX)"; \
+	  echo "$(CRT0_OBJ)"; \
+	  for obj in $(OBJS); do echo "$$obj"; done; \
+	  echo "$(LIB_PATH)"; \
+	} > "$(LINKFK)"
+	$(LD) -f "$(LINKFK)"
 
-# --- assemble .s -> .rel (preserve subdirs) ---
-$(OUT)/%.rel: %.s
-	@mkdir -p $(dir $@)
-	@echo "[as] $< -> $@"
-	$(AS) $(ASFLAGS) -o $@ $<
+# --- ihx -> bin ---
+$(BIN): $(IHX)
+	mkdir -p $(dir $@)
+	$(OBJCOPY) -I ihex -O binary "$(IHX)" "$(BIN)"
 
-# --- compile .c -> .rel (preserve subdirs) ---
-$(OUT)/%.rel: %.c
-	@mkdir -p $(dir $@)
-	@echo "[cc] $< -> $@"
-	$(CC) $(CFLAGS) -c -o $@ $<
+# --- bin -> tap ---
+$(TAP): $(BIN)
+	mkdir -p "$(BIN_DIR)"
+	$(BIN2TAP) -b -o "$(TAP)" -a $(LOAD_ADDR_DEC) "$(BIN)"
 
-# --- link all objects into one .ihx (CRT0 first) ---
-$(IHX): $(CRT0) $(OBJS)
-	@mkdir -p $(dir $@)
-	@echo "[link] $(notdir $@)"
-	$(CC) $(LDFLAGS) $(CRT0) $(OBJS) -o $@
+# --- build rules (preserve subdirs) ---
+$(CRT0_OBJ): $(CRT0_SRC)
+	mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -o "$@" "$<"
 
-# --- convert ihx -> bin using sdobjcopy (SDCC tool) ---
-$(BINOUT): $(IHX)
-	@mkdir -p $(dir $@)
-	@echo "[objcopy] $(notdir $@)"
-	$(OBJCOPY) -I ihex -O binary $< $@
+$(BUILD_DIR)/%.rel: $(SRC_DIR)/%.s
+	mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -o "$(abspath $@)" "$<"
 
-# --- wrap BIN into TAP using bin2tap (from fuse-emulator-utils) ---
-# Typical syntax: bin2tap -o out.tap -a <start_addr> -n <name> in.bin
-$(TAP): $(BINOUT)
-	@mkdir -p $(dir $@)
-	@echo "[bin2tap] $(notdir $@)"
-	$(BIN2TAP) -o $@ -a $(ZX_ADDR) $(BINOUT)
-
+$(BUILD_DIR)/%.rel: $(SRC_DIR)/%.c
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o "$(abspath $@)" "$<"
 
 clean:
-	@echo "[test/execute/clean] removing $(OUT)"
-	@rm -rf $(OUT)
+	rm -rf "$(BUILD_DIR)"
+	rm -rf "$(BIN_DIR)"

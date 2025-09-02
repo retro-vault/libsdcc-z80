@@ -1,6 +1,6 @@
 # ------------------ configuration ------------------
 
-TARGET     ?= libsdcc-z80
+TARGET     := libsdcc-z80
 
 BUILD_DIR  := $(abspath ../build)
 BIN_DIR    := $(abspath ../bin)
@@ -36,35 +36,26 @@ LIB    := $(BIN_DIR)/$(TARGET).lib
 
 # ------------------ rules ------------------
 
-.PHONY: all clean print
+.PHONY: all clean
 
 all: $(LIB)
 
 $(LIB): $(OBJS) | $(BIN_DIR)
-	@echo "[ar] $@"
-	@$(ENVPATH) $(AR) $(ARFLAGS) $@ $(OBJS)
+	$(ENVPATH) $(AR) $(ARFLAGS) $@ $(OBJS)
 
 # C -> build/.../file.rel
 $(BUILD_DIR)/%.rel: %.c
-	@echo "[cc] $< -> $@"
-	@mkdir -p $(@D)
-	@$(ENVPATH) $(CC) $(CFLAGS) -c -o $@ $<
+	mkdir -p $(@D)
+	$(ENVPATH) $(CC) $(CFLAGS) -c -o $@ $<
 
 # ASM -> build/.../file.rel  (explicit output path)
 $(BUILD_DIR)/%.rel: %.s
-	@echo "[as] $< -> $@"
-	@mkdir -p $(@D)
-	@$(ENVPATH) $(AS) $(ASFLAGS) -o $@ $(abspath $<)
+	mkdir -p $(@D)
+	$(ENVPATH) $(AS) $(ASFLAGS) -o $@ $(abspath $<)
 
 $(BIN_DIR):
-	@mkdir -p $(BIN_DIR)
+	mkdir -p $(BIN_DIR)
 
 clean:
-	@echo "[src/clean] removing $(BUILD_DIR)"
-	@rm -rf $(BUILD_DIR)
-
-print:
-	@echo "TARGET    = $(TARGET)"
-	@echo "BUILD_DIR = $(BUILD_DIR)"
-	@echo "BIN_DIR   = $(BIN_DIR)"
-	@echo "OBJS:" ; printf "  %s\n" $(OBJS)
+	rm -rf $(BUILD_DIR)
+	rm -rf $(BIN_DIR)
