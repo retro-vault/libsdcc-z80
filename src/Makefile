@@ -15,8 +15,6 @@ CFLAGS  ?= --std-c11 -mz80 -I. --no-std-crt0 --nostdinc --nostdlib --debug
 ASFLAGS ?= -x -g
 ARFLAGS ?= -rcs
 
-ENVPATH := env PATH=/opt/sdcc/bin:$$PATH
-
 # ------------------ sources & objects ------------------
 
 C_SRCS := $(shell find . -type f -name '*.c')
