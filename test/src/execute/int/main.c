@@ -2,12 +2,8 @@
 // (c) 2025 tomaz stih
 
 #include <stdint.h>
+#include <zx/spectrum.h>
 
-/* ROM I/O */
-extern void cinit(void);
-extern void cclear(void);
-extern void cputs(const char *s);
-extern void cputc(char ch);
 
 /* ---------- tiny print helpers ---------- */
 
@@ -720,8 +716,6 @@ void main(void){
     total++; passed += test_u32_cmp_gt0();
     total++; passed += test_s32_cmp_neg_lt0();
     total++; passed += test_u16_mul_promote_u32();
-
-
     total++; passed += test_u32_shr_31();
     total++; passed += test_s32_mod_large_neg(); 
 

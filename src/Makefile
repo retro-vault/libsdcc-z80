@@ -20,11 +20,8 @@ ARFLAGS ?= -rcs
 C_SRCS := $(shell find . -type f -name '*.c')
 S_SRCS := $(shell find . -type f -name '*.s')
 
-# Optionally exclude startup/libc bits from the lib:
-S_EXCLUDE := crt0.s %/crt0.s memmove.s %/memmove.s
-
 C_SRCS_N := $(patsubst ./%,%,$(C_SRCS))
-S_SRCS_N := $(filter-out $(S_EXCLUDE),$(patsubst ./%,%,$(S_SRCS)))
+S_SRCS_N := $(patsubst ./%,%,$(S_SRCS))
 
 C_OBJS := $(addprefix $(BUILD_DIR)/,$(C_SRCS_N:.c=.rel))
 S_OBJS := $(addprefix $(BUILD_DIR)/,$(S_SRCS_N:.s=.rel))

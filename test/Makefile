@@ -1,8 +1,16 @@
-.PHONY: all clean
+# -------- test/Makefile --------
+.PHONY: all lib src clean
 
-all:
-	$(MAKE) -C compile
-	$(MAKE) -C execute
+all: src
+
+# Build test support library first
+lib:
+	$(MAKE) -C lib all
+
+# Build tests (depends on lib)
+src: lib
+	$(MAKE) -C src all
 
 clean:
-	$(MAKE) -C compile execute clean || true
+	$(MAKE) -C lib clean || true
+	$(MAKE) -C src clean || true
