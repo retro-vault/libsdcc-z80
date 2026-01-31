@@ -1,206 +1,192 @@
-        ;; signed 32-bit division with remainder helper (long)
-        ;; divides x by y; __divslong returns quotient (de:hl),
-        ;; while __get_remainder_long returns the remainder (de:hl) with
-        ;; the correct sign (matching the dividend).
         ;;
-        ;; code from sdcc project
+        ;; signed 32-bit division (long), reentrant
         ;;
-        ;; gpl-2.0-or-later (see: LICENSE)
-        ;; copyright (c) 2025 tomaz stih
+        ;; ABI (sdcccall(1), matches your build):
+        ;;   x (dividend) in regs:  DE = low16, HL = high16
+        ;;   y (divisor)  on stack: 4(ix)..7(ix) = y0..y3 (lsb..msb)
+        ;; returns:
+        ;;   quotient in regs:      DE = low16, HL = high16
+        ;;
+        ;; semantics:
+        ;;   q = trunc(x / y) toward zero
+        ;;
 
-        .module divlong                             ; module name
+        .module divlong
         .optsdcc -mz80 sdcccall(1)
 
+        .area   _CODE
 
-        .area   _CODE                               ; code segment
+        .globl  __divslong
 
-        .globl  __divslong                          ; export symbols
-        .globl  __get_remainder_long
-        .globl  __modslong
+        ;; locals (relative to ix):
+        ;;   -1      : sign_q (0/1) = sign(x) xor sign(y)
+        ;;   -2      : sign_x (0/1) = sign(x)
+        ;;   -6..-3  : abs(y) (low..high)
+        ;;   -10..-7 : remainder (low..high)
 
-        ;; frame layout used by these helpers (relative to ix):
-        ;;   -10(ix) : sign flag of dividend (0 = +, 1 = -)
-        ;;   -9..-6  : absolute divisor copy (low..high)
-        ;;   -5..-2  : remainder (low..high)
-
-        ;; __divslong
-        ;; inputs (sdcccall(1)):
-        ;;   de:hl = dividend x (signed 32-bit, de high, hl low)
-        ;;   4(ix)..7(ix) = divisor y (signed 32-bit, little endian)
-        ;; outputs:
-        ;;   de:hl = quotient q (signed 32-bit, de high, hl low)
-        ;; side effects:
-        ;;   stores unsigned remainder to -5..-2(ix),
-        ;;   stores dividend sign (0/1) to -10(ix) for __get_remainder_long
-        ;; clobbers:
-        ;;   a, b, c, d, e, h, l, f; preserves ix for the helper
 __divslong:
-        push    ix                                  ; set up frame
+        push    ix
         ld      ix, #0
         add     ix, sp
 
-        ;; reserve 10 bytes of locals
+        ;; save incoming x.high (HL) into BC; HL used for frame math
+        ld      b, h
+        ld      c, l
+
+        ;; reserve 10 bytes locals
         ld      hl, #-10
         add     hl, sp
         ld      sp, hl
 
-        ;; clear remainder (-5..-2) and sign flag (-10)
+        ;; restore HL (x.high)
+        ld      h, b
+        ld      l, c
+
+        ;; clear sign flags
         xor     a
-        ld      -5(ix), a
-        ld      -4(ix), a
-        ld      -3(ix), a
+        ld      -1(ix), a
         ld      -2(ix), a
-        ld      -10(ix), a
 
-        ;; copy divisor y and take |y| into -9..-6 (low..high)
-        ld      a, 4(ix)                            ; y0
-        ld      -9(ix), a
-        ld      a, 5(ix)                            ; y1
-        ld      -8(ix), a
-        ld      a, 6(ix)                            ; y2
-        ld      -7(ix), a
-        ld      a, 7(ix)                            ; y3 (sign byte)
-        ld      -6(ix), a
+        ;; normalize x into internal order DE:HL = high:low
+        ;; incoming: DE low, HL high -> internal: DE high, HL low
+        ex      de, hl
 
-        bit     7, -6(ix)                           ; if y < 0, negate local copy
-        jr      z, .div_y_abs_done
-        xor     a                                   ; a = 0
-        sub     a, -9(ix)
-        ld      -9(ix), a
-        xor     a
-        sbc     a, -8(ix)
-        ld      -8(ix), a
-        xor     a
-        sbc     a, -7(ix)
-        ld      -7(ix), a
-        xor     a
-        sbc     a, -6(ix)
-        ld      -6(ix), a
-.div_y_abs_done:
-
-        ;; save sign(x) into -10(ix); if x < 0, make x = |x|
+        ;; determine sign(x), store to -2(ix), and abs(x) if negative
         bit     7, d
-        jr      z, .div_x_abs_done
-        ld      -10(ix), #1                         ; remember dividend was negative
+        jr      z, .x_abs_done
+        ld      -2(ix), #1
         xor     a
         sub     a, l
         ld      l, a
-        xor     a
+        ld      a, #0
         sbc     a, h
         ld      h, a
-        xor     a
+        ld      a, #0
         sbc     a, e
         ld      e, a
-        xor     a
+        ld      a, #0
         sbc     a, d
         ld      d, a
-.div_x_abs_done:
+.x_abs_done:
 
-        ;; unsigned 32/32 divide:
-        ;; quotient accumulates in de:hl (shift/sub), remainder in -5..-2(ix)
+        ;; copy y from stack 4..7 into abs(y) locals -6..-3 (low..high)
+        ld      a, 4(ix)
+        ld      -6(ix), a
+        ld      a, 5(ix)
+        ld      -5(ix), a
+        ld      a, 6(ix)
+        ld      -4(ix), a
+        ld      a, 7(ix)
+        ld      -3(ix), a
+
+        ;; compute sign_q = sign(x) xor sign(y)
+        ld      a, -2(ix)
+        bit     7, -3(ix)
+        jr      z, .sign_q_done
+        xor     #1
+.sign_q_done:
+        ld      -1(ix), a
+
+        ;; abs(y) if negative
+        bit     7, -3(ix)
+        jr      z, .y_abs_done
+        xor     a
+        sub     a, -6(ix)
+        ld      -6(ix), a
+        ld      a, #0
+        sbc     a, -5(ix)
+        ld      -5(ix), a
+        ld      a, #0
+        sbc     a, -4(ix)
+        ld      -4(ix), a
+        ld      a, #0
+        sbc     a, -3(ix)
+        ld      -3(ix), a
+.y_abs_done:
+
+        ;; remainder = 0 at -10..-7 (low..high)
+        xor     a
+        ld      -10(ix), a
+        ld      -9(ix),  a
+        ld      -8(ix),  a
+        ld      -7(ix),  a
+
+        ;; unsigned restoring division: quotient in de:hl, remainder in locals
         ld      b, #32
+
 .u32_div_loop:
-        ;; shift quotient (x) left by 1 (low first so carry flows upwards)
+        ;; shift quotient (x) left by 1
         add     hl, hl
         rl      e
         rl      d
 
-        ;; shift remainder left by 1, bringing in the carry bit from above
-        rl      -2(ix)                              ; rem low0
-        rl      -3(ix)                              ; rem low1
-        rl      -4(ix)                              ; rem high0
-        rl      -5(ix)                              ; rem high1
+        ;; remainder <<= 1, bring in carry from x shift
+        rl      -10(ix)
+        rl      -9(ix)
+        rl      -8(ix)
+        rl      -7(ix)
 
-        ;; try: remainder -= |y|
+        ;; try: remainder -= abs(y)
         or      a                                   ; clear carry
-        ld      a, -2(ix)
-        sbc     a, -9(ix)
-        ld      -2(ix), a
-        ld      a, -3(ix)
-        sbc     a, -8(ix)
-        ld      -3(ix), a
-        ld      a, -4(ix)
-        sbc     a, -7(ix)
-        ld      -4(ix), a
-        ld      a, -5(ix)
+        ld      a, -10(ix)
         sbc     a, -6(ix)
-        ld      -5(ix), a
+        ld      -10(ix), a
+        ld      a, -9(ix)
+        sbc     a, -5(ix)
+        ld      -9(ix), a
+        ld      a, -8(ix)
+        sbc     a, -4(ix)
+        ld      -8(ix), a
+        ld      a, -7(ix)
+        sbc     a, -3(ix)
+        ld      -7(ix), a
         jr      nc, .keep_sub
 
-        ;; borrow -> restore remainder (add |y| back)
-        ld      a, -2(ix)
-        adc     a, -9(ix)
-        ld      -2(ix), a
-        ld      a, -3(ix)
-        adc     a, -8(ix)
-        ld      -3(ix), a
-        ld      a, -4(ix)
-        adc     a, -7(ix)
-        ld      -4(ix), a
-        ld      a, -5(ix)
+        ;; borrow -> restore remainder (add abs(y) back)
+        or      a                                   ; CLEAR carry before adc!
+        ld      a, -10(ix)
         adc     a, -6(ix)
-        ld      -5(ix), a
+        ld      -10(ix), a
+        ld      a, -9(ix)
+        adc     a, -5(ix)
+        ld      -9(ix), a
+        ld      a, -8(ix)
+        adc     a, -4(ix)
+        ld      -8(ix), a
+        ld      a, -7(ix)
+        adc     a, -3(ix)
+        ld      -7(ix), a
         jr      .next_bit
 
 .keep_sub:
-        set     0, l                                ; set lsb of quotient
+        set     0, l
+
 .next_bit:
         djnz    .u32_div_loop
 
-        ;; set quotient sign: if (x<0)^(y<0) then negate de:hl
-        ;; we have sign(x) in -10(ix), and sign(y) is bit7 of original 7(ix)
-        ld      a, -10(ix)
-        bit     7, 7(ix)
-        jr      z, .no_flip
-        xor     #1
-.no_flip:
+        ;; apply quotient sign if needed (sign_q in -1(ix))
+        ld      a, -1(ix)
         or      a
-        jr      z, .div_q_done
+        jr      z, .ret_order
 
-        ;; negate quotient
         xor     a
         sub     a, l
         ld      l, a
-        xor     a
+        ld      a, #0
         sbc     a, h
         ld      h, a
-        xor     a
+        ld      a, #0
         sbc     a, e
         ld      e, a
-        xor     a
+        ld      a, #0
         sbc     a, d
         ld      d, a
-.div_q_done:
-        ;; leave: de:hl = quotient, remainder in -5..-2(ix),
-        ;;        -10(ix) holds (x<0) as 0/1
-        ret                                          ; keep ix for helper
 
-        ;; __get_remainder_long
-        ;; inputs:  expects to be called in the *same frame* as __divslong
-        ;;          (ix still valid), with remainder stored at -5..-2(ix)
-        ;; outputs: de:hl = remainder (signed 32-bit, sign matches dividend)
-        ;; clobbers: a, d, e, h, l, f; preserves ix
-__get_remainder_long:
-        ld      l, -2(ix)                           ; gather remainder into de:hl
-        ld      h, -3(ix)
-        ld      e, -4(ix)
-        ld      d, -5(ix)
+.ret_order:
+        ;; quotient currently internal (DE high, HL low) -> ABI wants (DE low, HL high)
+        ex      de, hl
 
-        ld      a, -10(ix)                          ; if original dividend < 0
-        or      a
-        ret     z                                    ; remainder already positive
-
-        ;; negate remainder
-        xor     a
-        sub     a, l
-        ld      l, a
-        xor     a
-        sbc     a, h
-        ld      h, a
-        xor     a
-        sbc     a, e
-        ld      e, a
-        xor     a
-        sbc     a, d
-        ld      d, a
+        ;; tear down frame
+        ld      sp, ix
+        pop     ix
         ret

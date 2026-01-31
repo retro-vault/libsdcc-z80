@@ -23,6 +23,11 @@ static void put_hex16(uint16_t v){
     cputs(b);
 }
 
+static void put_hex32(uint32_t v) {
+    put_hex16((uint16_t)(v >> 16));   // high word first
+    put_hex16((uint16_t)(v & 0xFFFF)); // low word
+}
+
 /* ---------- “make value non-constant” helpers (C89/SDCC-safe) ---------- */
 
 static uint8_t  mk_u8 (uint8_t  x){ volatile uint8_t  t=x; return t; }
@@ -139,17 +144,7 @@ static int test_u32_mul(void){
     uint32_t r=(uint32_t)(mk_u32(70000uL)*mk_u32(3u));
     if(r==210000uL){ ok(name); return 1; } fail(name); return 0;
 }
-static int test_u32_divmod(void){
-    const char *n1="u32 1000000/3==333333";
-    const char *n2="u32 1000000%3==1";
-    uint32_t a=mk_u32(1000000uL);
-    uint32_t q=a/mk_u32(3u);
-    uint32_t m=a%mk_u32(3u);
-    int okall=1;
-    if(q==333333uL) ok(n1); else { fail(n1); okall=0; }
-    if(m==1u)       ok(n2); else { fail(n2); okall=0; }
-    return okall;
-}
+
 static int test_s32_divmod(void){
     const char *n1="s32 -1000000/3==-333333";
     const char *n2="s32 -1000000%3==-1";
@@ -211,9 +206,9 @@ static int test_u8_shr(void){
     if (r == (uint8_t)0x40) { ok(name); return 1; } fail(name); return 0;
 }
 static int test_u8_bits(void){
-    const char *name="u8 (0xAA&0x0F)^(0xF0|0x01)==0x54";
+    const char *name="u8 (0xAA&0x0F)^(0xF0|0x01)==0xFB";
     uint8_t r = (uint8_t)((mk_u8(0xAA)&mk_u8(0x0F)) ^ (mk_u8(0xF0)|mk_u8(0x01)));
-    if (r == (uint8_t)0x54) { ok(name); return 1; } fail(name); return 0;
+    if (r == (uint8_t)0xFB) { ok(name); return 1; } fail(name); return 0;
 }
 
 /* ---- u16 wrap/borrow edges ---- */
@@ -228,9 +223,9 @@ static int test_u16_dec_wrap(void){
     if (r == 0xFFFFu) { ok(name); return 1; } fail(name); return 0;
 }
 static int test_u16_bits(void){
-    const char *name="u16 (0x1234&0x0F0F)|(0x00F0^0x0FF0)==0x1FFF";
+    const char *name="u16 (0x1234&0x0F0F)|(0x00F0^0x0FF0)==0x0F04";
     uint16_t r = (uint16_t)((mk_u16(0x1234)&mk_u16(0x0F0F)) | (mk_u16(0x00F0)^mk_u16(0x0FF0)));
-    if (r == 0x1FFFu) { ok(name); return 1; } fail(name); return 0;
+    if (r == 0x0F04u) { ok(name); return 1; } fail(name); return 0;
 }
 
 /* ---- s16 neg & abs-like sanity (no UB) ---- */
@@ -251,19 +246,14 @@ static int test_u32_sub_borrow(void){
     uint32_t r = (uint32_t)(mk_u32(0UL) - mk_u32(1UL));
     if (r == 0xFFFFFFFFUL) { ok(name); return 1; } fail(name); return 0;
 }
-static int test_u32_bits(void){
-    const char *name="u32 (12345678&00FF00FF)^(0000FFFF|FF000000)==EDFF56E7";
-    uint32_t r = (mk_u32(0x12345678UL)&mk_u32(0x00FF00FFUL)) ^
-                 (mk_u32(0x0000FFFFUL)|mk_u32(0xFF000000UL));
-    if (r == 0xEDFF56E7UL) { ok(name); return 1; } fail(name); return 0;
-}
 static int test_s32_sar(void){
     const char *name="s32 0x80000000>>1==0xC0000000";
     int32_t  x = mk_s32((int32_t)0x80000000UL);
     int32_t  r = (int32_t)(x >> mk_u32(1));
     if ((uint32_t)r == 0xC0000000UL) { ok(name); return 1; } fail(name); return 0;
 }
-/* widening mult: force 32-bit result by promoting operands first */
+
+/* ---- 32 ---- */
 static int test_u16x_u16_to_u32(void){
     const char *name="(u16)60000*(u16)1000 -> u32 60000000";
     uint16_t a = mk_u16(60000u);
@@ -271,6 +261,379 @@ static int test_u16x_u16_to_u32(void){
     uint32_t r = (uint32_t)mk_u32((uint32_t)a) * (uint32_t)mk_u32((uint32_t)b);
     if (r == 60000000UL) { ok(name); return 1; } fail(name); return 0;
 }
+
+static int test_u32_bits(void){
+    const char *name="u32 (12345678&00FF00FF)^(0000FFFF|FF000000)==FF34FF87";
+    uint32_t r = (mk_u32(0x12345678UL)&mk_u32(0x00FF00FFUL)) ^
+                 (mk_u32(0x0000FFFFUL)|mk_u32(0xFF000000UL));
+    if (r == 0xFF34FF87UL) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u32_divmod(void){
+    const char *n1="u32 1000000/3==333333";
+    const char *n2="u32 1000000%3==1";
+    uint32_t a=mk_u32(1000000uL);
+    uint32_t q=a/mk_u32(3u);
+    uint32_t m=a%mk_u32(3u);
+    int okall=1;
+    if(q==333333uL) ok(n1); else { fail(n1); okall=0; }
+    if(m==1u)       ok(n2); else { fail(n2); okall=0; }
+    return okall;
+}
+
+
+/* Additional integer tests for SDCC integer behaviour (append to suite) */
+
+static int test_u32_mul_wrap(void){
+    const char *name="u32 0xFFFFFFFF*2==0xFFFFFFFE";
+    uint32_t r = (uint32_t)(mk_u32(0xFFFFFFFFUL) * mk_u32(2UL));
+    if (r == 0xFFFFFFFEUL) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s32_mul_neg(void){
+    const char *name="s32 -200000*2000==-400000000";
+    int32_t r = (int32_t)(mk_s32(-200000) * mk_s32(2000));
+    if (r == (int32_t)-400000000) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_mixed_signed_unsigned_cmp(void){
+    const char *name="s32 -1 < u32 1 -> false";
+    /* -1 promoted to unsigned -> large, so comparison should be false */
+    if (!(mk_s32(-1) < mk_u32(1u))) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_signed_plus_unsigned_arith(void){
+    const char *name="s32 -1 + u32 2 == u32 1";
+    /* mixed arithmetic: signed converted to unsigned, result unsigned */
+    uint32_t r = (uint32_t)(mk_s32(-1) + mk_u32(2u));
+    if (r == 1u) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u16_compound_assign_wrap(void){
+    const char *name="u16 0xFF00 += 0x0200 -> 0x0100 (wrap)";
+    uint16_t x = mk_u16(0xFF00u);
+    x += mk_u16(0x0200u); /* promoted, then assigned back with wrap */
+    if (x == 0x0100u) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s16_div_compound(void){
+    const char *name="s16 -3 /= 2 -> -1 (trunc toward zero)";
+    int16_t y = mk_s16(-3);
+    y /= mk_s16(2);
+    if (y == (int16_t)-1) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_bitwise_not_u32(void){
+    const char *name="u32 ~0 == 0xFFFFFFFF";
+    uint32_t r = (uint32_t)(~mk_u32(0u));
+    if (r == 0xFFFFFFFFUL) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u16_shift_large(void){
+    const char *name="u16 (1<<15)==0x8000 (promotion rules)";
+    uint16_t r = (uint16_t)(mk_u16(1) << mk_u16(15));
+    if (r == 0x8000u) { ok(name); return 1; } fail(name); return 0;
+}
+
+
+
+static int test_s32_mod_negative_small(void){
+    const char *name="s32 -7%3 == -1";
+    int32_t r = (int32_t)(mk_s32(-7) % mk_s32(3));
+    if (r == (int32_t)-1) { ok(name); return 1; } fail(name); return 0;
+}
+
+
+/* ---------- Division & Modulo edge cases (very important for runtime libs) ---------- */
+
+/* Division by zero – SDCC usually calls a handler or traps, but test that it doesn't crash silently */
+static int test_u16_div_by_zero(void) {
+    const char *name = "u16 5000/0 ... should not hang/crash";
+    uint16_t a = mk_u16(5000u);
+    uint16_t b = mk_u16(0u);
+    volatile uint16_t r = (uint16_t)(a / b);  /* volatile to force evaluation */
+    /* If we reach here without crash ... ok (implementation-defined) */
+    ok(name); return 1;  /* Adjust if you have a defined __div_by_zero handler */
+}
+
+/* Signed division rounding (C99+ toward zero) */
+static int test_s16_div_toward_zero(void) {
+    const char *name = "s16 -7/3 == -2 (toward zero)";
+    int16_t a = mk_s16(-7);
+    int16_t b = mk_s16(3);
+    int16_t r = (int16_t)(a / b);
+    if (r == -2) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_s32_div_toward_zero(void) {
+    const char *name = "s32 -1000007/1000 == -1000 (toward zero)";
+    int32_t a = mk_s32(-1000007L);
+    int32_t b = mk_s32(1000L);
+    int32_t r = a / b;
+    if (r == -1000L) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+/* Modulo sign follows dividend (C99) */
+static int test_s16_mod_sign(void) {
+    const char *name = "s16 -10 % 3 == -1";
+    int16_t a = mk_s16(-10);
+    int16_t b = mk_s16(3);
+    int16_t r = (int16_t)(a % b);
+    if (r == -1) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+
+
+/* Signed overflow in multiplication (implementation-defined, but test consistency) */
+static int test_s16_mul_overflow(void) {
+    const char *name = "s16 30000 * 1000 overflow ... ? (impl defined)";
+    int16_t a = mk_s16(30000);
+    int16_t b = mk_s16(1000);
+    volatile int16_t r = (int16_t)(a * b);  /* should wrap or trap */
+    /* Just check it doesn't crash; compare to known impl if you want */
+    ok(name); return 1;  /* or add expected value if you control runtime */
+}
+
+/* More widening mul tests (signed & larger values) */
+static int test_s16x_s16_to_s32(void) {
+    const char *name = "(s16)-30000 * (s16)2000 ... s32 -60000000";
+    int16_t a = mk_s16(-30000);
+    int16_t b = mk_s16(2000);
+    int32_t r = (int32_t)a * (int32_t)b;
+    if (r == -60000000L) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_u16x_u16_large_to_u32(void) {
+    const char *name = "(u16)65535 * (u16)65535 ... u32 4294836225";
+    uint16_t a = mk_u16(65535u);
+    uint16_t b = mk_u16(65535u);
+    uint32_t r = (uint32_t)a * (uint32_t)b;
+    if (r == 4294836225UL) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+/* Signed right-shift on most-negative value (arithmetic shift preserves sign) */
+static int test_s32_sar_minval(void) {
+    const char *name = "s32 INT32_MIN >> 1 == INT32_MIN / 2 (sign extended)";
+    int32_t min = mk_s32((int32_t)0x80000000UL);
+    int32_t r = min >> 1;
+    if (r == (int32_t)0xC0000000UL) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+/* Unsigned 32-bit mul with high product bits (low 32 only) */
+static int test_u32_mul_high(void) {
+    const char *name = "u32 0xFFFFFFFF * 0xFFFFFFFF low32 == 1";
+    uint32_t r = mk_u32(0xFFFFFFFFUL) * mk_u32(0xFFFFFFFFUL);
+    if (r == 1UL) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+
+/* 3) s8/s16 arithmetic right shift */
+static int test_s8_arshift(void){
+    const char *n1="s8 -2>>1==-1";
+    const char *n2="s8 -128>>1==-64";
+    int8_t a = mk_s8((int8_t)-2);
+    int8_t b = mk_s8((int8_t)-128);
+    int8_t r1 = (int8_t)(mk_s8(a) >> mk_u8(1u));
+    int8_t r2 = (int8_t)(mk_s8(b) >> mk_u8(1u));
+    int okall=1;
+    if(r1==(int8_t)-1){ ok(n1); } else { fail(n1); okall=0; }
+    if(r2==(int8_t)-64){ ok(n2); } else { fail(n2); okall=0; }
+    return okall;
+}
+
+static int test_s16_arshift(void){
+    const char *n1="s16 -2>>1==-1";
+    const char *n2="s16 -32768>>1==-16384";
+    int16_t a = mk_s16((int16_t)-2);
+    int16_t b = mk_s16((int16_t)-32768);
+    int16_t r1 = (int16_t)(mk_s16(a) >> mk_u16(1u));
+    int16_t r2 = (int16_t)(mk_s16(b) >> mk_u16(1u));
+    int okall=1;
+    if(r1==(int16_t)-1){ ok(n1); } else { fail(n1); okall=0; }
+    if(r2==(int16_t)-16384){ ok(n2); } else { fail(n2); okall=0; }
+    return okall;
+}
+
+/* 4) u32 add/sub carry/borrow */
+static int test_u32_add_carry1(void){
+    const char *name="u32 0x0000FFFF+1==0x00010000";
+    uint32_t a = mk_u32(0x0000FFFFUL);
+    uint32_t r = mk_u32(a) + mk_u32(1UL);
+    if(r==0x00010000UL){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u32_add_wrap(void){
+    const char *name="u32 0xFFFFFFFF+1==0x00000000";
+    uint32_t a = mk_u32(0xFFFFFFFFUL);
+    uint32_t r = mk_u32(a) + mk_u32(1UL);
+    if(r==0x00000000UL){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u32_sub_borrow1(void){
+    const char *name="u32 0x00010000-1==0x0000FFFF";
+    uint32_t a = mk_u32(0x00010000UL);
+    uint32_t r = mk_u32(a) - mk_u32(1UL);
+    if(r==0x0000FFFFUL){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u32_sub_wrap(void){
+    const char *name="u32 0x00000000-1==0xFFFFFFFF";
+    uint32_t a = mk_u32(0x00000000UL);
+    uint32_t r = mk_u32(a) - mk_u32(1UL);
+    if(r==0xFFFFFFFFUL){ ok(name); return 1; } fail(name); return 0;
+}
+
+/* 5) u32 multiply edges */
+static int test_u32_mul_edge1(void){
+    const char *name="u32 0xFFFFFFFF*2==0xFFFFFFFE";
+    uint32_t a = mk_u32(0xFFFFFFFFUL);
+    uint32_t r = mk_u32(a) * mk_u32(2UL);
+    if(r==0xFFFFFFFEUL){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u32_mul_edge2(void){
+    const char *name="u32 0x80000000*2==0x00000000";
+    uint32_t a = mk_u32(0x80000000UL);
+    uint32_t r = mk_u32(a) * mk_u32(2UL);
+    if(r==0x00000000UL){ ok(name); return 1; } fail(name); return 0;
+}
+
+/* 6) u32 div/mod power-of-two */
+static int test_u32_div_pow2(void){
+    const char *name="u32 0x12345678/256==0x00123456";
+    uint32_t a = mk_u32(0x12345678UL);
+    uint32_t q = mk_u32(a) / mk_u32(256UL);
+    if(q==0x00123456UL){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u32_mod_pow2(void){
+    const char *name="u32 0x12345678%256==0x00000078";
+    uint32_t a = mk_u32(0x12345678UL);
+    uint32_t m = mk_u32(a) % mk_u32(256UL);
+    if(m==0x00000078UL){ ok(name); return 1; } fail(name); return 0;
+}
+
+/* 7) s32 division/remainder sign rules */
+static int test_s32_div_n7_p3(void){
+    const char *name="s32 -7/3==-2";
+    int32_t a = mk_s32(-7);
+    int32_t b = mk_s32(3);
+    int32_t q = mk_s32(a) / mk_s32(b);
+    if(q==(int32_t)-2){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s32_mod_n7_p3(void){
+    const char *name="s32 -7%3==-1";
+    int32_t a = mk_s32(-7);
+    int32_t b = mk_s32(3);
+    int32_t m = mk_s32(a) % mk_s32(b);
+    if(m==(int32_t)-1){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s32_div_p7_n3(void){
+    const char *name="s32 7/-3==-2";
+    int32_t a = mk_s32(7);
+    int32_t b = mk_s32(-3);
+    int32_t q = mk_s32(a) / mk_s32(b);
+    if(q==(int32_t)-2){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s32_mod_p7_n3(void){
+    const char *name="s32 7%-3==1";
+    int32_t a = mk_s32(7);
+    int32_t b = mk_s32(-3);
+    int32_t m = mk_s32(a) % mk_s32(b);
+    if(m==(int32_t)1){ ok(name); return 1; } fail(name); return 0;
+}
+
+/* 8) optional observe-only UB edge */
+static int test_s32_min_div_minus1_observe(void){
+    const char *name="s32 INT32_MIN/-1 (observe behavior)";
+    int32_t a = mk_s32((int32_t)0x80000000L);
+    int32_t b = mk_s32((int32_t)-1);
+    int32_t q = mk_s32(a) / mk_s32(b);
+    (void)q;
+    ok(name);
+    return 1;
+}
+
+/* 9) promotions / extensions */
+static int test_u16_to_u32_zero_extend(void){
+    const char *name="u32 (u16)0xFFFF -> 0x0000FFFF";
+    uint16_t a = mk_u16(0xFFFFu);
+    uint32_t r = mk_u32((uint32_t)a);
+    if(r==0x0000FFFFUL){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s16_to_s32_sign_extend(void){
+    const char *name="s32 (s16)-1 -> 0xFFFFFFFF";
+    int16_t a = mk_s16((int16_t)-1);
+    int32_t r = mk_s32((int32_t)a);
+    if((uint32_t)r==0xFFFFFFFFUL){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_u8_to_u32_zero_extend(void){
+    const char *name="u32 (u8)0xFF -> 0x000000FF";
+    uint8_t a = mk_u8(0xFFu);
+    uint32_t r = mk_u32((uint32_t)a);
+    if(r==0x000000FFUL){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s8_to_s32_sign_extend(void){
+    const char *name="s32 (s8)-1 -> 0xFFFFFFFF";
+    int8_t a = mk_s8((int8_t)-1);
+    int32_t r = mk_s32((int32_t)a);
+    if((uint32_t)r==0xFFFFFFFFUL){ ok(name); return 1; } fail(name); return 0;
+}
+
+/* 10) comparisons */
+static int test_u32_cmp_gt0(void){
+    const char *name="u32 0xFFFFFFFF>0";
+    uint32_t a = mk_u32(0xFFFFFFFFUL);
+    uint32_t b = mk_u32(0UL);
+    if(mk_u32(a) > mk_u32(b)){ ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s32_cmp_neg_lt0(void){
+    const char *name="s32 -1<0";
+    int32_t a = mk_s32((int32_t)-1);
+    int32_t b = mk_s32((int32_t)0);
+    if(mk_s32(a) < mk_s32(b)){ ok(name); return 1; } fail(name); return 0;
+}
+
+/* 11) widening multiply promotion */
+static int test_u16_mul_promote_u32(void){
+    const char *name="u32 (u16)65535*(u16)65535==0xFFFE0001";
+    uint16_t a = mk_u16(65535u);
+    uint16_t b = mk_u16(65535u);
+    uint32_t r = (uint32_t)mk_u32((uint32_t)a) * (uint32_t)mk_u32((uint32_t)b);
+    if(r==0xFFFE0001UL){ ok(name); return 1; } fail(name); return 0;
+}
+
+
+static int test_u32_shr_31(void){
+    const char *name="u32 0x80000000>>31 == 1";
+    uint32_t x = mk_u32(0x80000000UL);
+    uint32_t r = (uint32_t)(x >> mk_u32(31u));
+    if (r == 1u) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s32_mod_large_neg(void) {
+    const char *name = "s32 -2147483647 % 1000000 == -483647";
+    int32_t a = mk_s32(-2147483647L);
+    int32_t b = mk_s32(1000000L);
+    int32_t r = mk_s32(a) % mk_s32(b);
+    if (r == (int32_t)-483647L) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
 
 /* ---------- main ---------- */
 
@@ -284,7 +647,6 @@ void main(void){
 
     total++; passed += test_u8_wrap_add();
     total++; passed += test_s8_cmp();
-
     total++; passed += test_u16_add();
     total++; passed += test_u16_sub();
     total++; passed += test_u16_mul();
@@ -311,22 +673,58 @@ void main(void){
     total++; passed += test_s32_sar();
     total++; passed += test_u32_add_carry();
     total++; passed += test_u32_sub_borrow();
-
-/*
     total++; passed += test_u8_bits();
-    total++; passed += test_u32_mul();
     total++; passed += test_u16_bits();
     total++; passed += test_u16x_u16_to_u32();
-
+    total++; passed += test_u32_mul();
     total++; passed += test_u32_bits();
     total++; passed += test_u32_divmod();
     total++; passed += test_s32_divmod();
+    total++; passed += test_u16_div_by_zero();        
+    total++; passed += test_s16_div_toward_zero();
+    total++; passed += test_s32_div_toward_zero();
+    total++; passed += test_s16_mod_sign();      
+    total++; passed += test_s16_mul_overflow();        
+    total++; passed += test_s16x_s16_to_s32();
+    total++; passed += test_u16x_u16_large_to_u32();
+    total++; passed += test_s32_sar_minval();
+    total++; passed += test_u32_mul_high();
+    total++; passed += test_u32_mul_wrap();
+    total++; passed += test_s32_mul_neg();
+    total++; passed += test_mixed_signed_unsigned_cmp();
+    total++; passed += test_signed_plus_unsigned_arith();
+    total++; passed += test_u16_compound_assign_wrap();
+    total++; passed += test_s16_div_compound();
+    total++; passed += test_bitwise_not_u32();
+    total++; passed += test_u16_shift_large();
+    total++; passed += test_s32_mod_negative_small();
+    total++; passed += test_s8_arshift();
+    total++; passed += test_s16_arshift();
+    total++; passed += test_u32_add_carry1();
+    total++; passed += test_u32_add_wrap();
+    total++; passed += test_u32_sub_borrow1();
+    total++; passed += test_u32_sub_wrap();
+    total++; passed += test_u32_mul_edge1();
+    total++; passed += test_u32_mul_edge2();
+    total++; passed += test_u32_div_pow2();
+    total++; passed += test_u32_mod_pow2();
+    total++; passed += test_s32_div_n7_p3();
+    total++; passed += test_s32_mod_n7_p3();
+    total++; passed += test_s32_div_p7_n3();
+    total++; passed += test_s32_mod_p7_n3();
+    total++; passed += test_s32_min_div_minus1_observe();
+    total++; passed += test_u16_to_u32_zero_extend();
+    total++; passed += test_s16_to_s32_sign_extend();
+    total++; passed += test_u8_to_u32_zero_extend();
+    total++; passed += test_s8_to_s32_sign_extend();
+    total++; passed += test_u32_cmp_gt0();
+    total++; passed += test_s32_cmp_neg_lt0();
+    total++; passed += test_u16_mul_promote_u32();
 
 
+    total++; passed += test_u32_shr_31();
+    total++; passed += test_s32_mod_large_neg(); 
 
-
-
-*/
     cputs("Summary: ");
     put_hex16((uint16_t)passed);
     cputc('/');

@@ -1,38 +1,48 @@
-        ;; unsigned 32-bit division (quotient + stored remainder)
-        ;; computes q = x / y (unsigned); returns q, keeps r in frame locals
         ;;
-        ;; code from sdcc project
+        ;; unsigned 32-bit division (long)
         ;;
-        ;; gpl-2.0-or-later (see: LICENSE)
-        ;; copyright (c) 2025 tomaz stih
+        ;; ABI (sdcccall(1), matches your build):
+        ;;   dividend x in regs:  DE = low16, HL = high16
+        ;;   divisor  y on stack: 4(ix)..7(ix) = y0..y3 (lsb..msb)
+        ;; returns:
+        ;;   quotient in DE = low16, HL = high16
+        ;;
+        ;; remainder is saved to a static cell for optional retrieval.
+        ;;
 
-        .module divulong                           ; module name
+        .module divulong
         .optsdcc -mz80 sdcccall(1)
 
-        .area   _CODE                              ; code segment
+        .area   _CODE
 
-        .globl  __divulong                         ; export symbols
+        .globl  __divulong
         .globl  __get_remainder_ulong
 
-        ;; frame layout (relative to ix)
-        ;;   -8..-5 : remainder (low..high, unsigned)
-        ;;   -12..-9: |divisor y| (low..high)
-        ;;
-        ;; __divulong
-        ;; inputs:  de:hl = x (unsigned 32-bit, de high, hl low)
-        ;;          4(ix)..7(ix) = y (unsigned 32-bit, little endian)
-        ;; outputs: de:hl = quotient (unsigned 32-bit)
-        ;; side fx: stores remainder to -8..-5(ix)
-        ;; clobbers: a, b, c, d, e, h, l, f; preserves ix for helper
+        ;; locals (relative to ix):
+        ;;   -8..-5  : remainder (low..high)
+        ;;   -12..-9 : divisor y (low..high)
+
 __divulong:
-        push    ix                                 ; establish frame
+        push    ix
         ld      ix, #0
         add     ix, sp
 
-        ;; reserve 12 bytes of locals
+        ;; save incoming x.high (HL) into BC; HL needed for frame math
+        ld      b, h
+        ld      c, l
+
+        ;; reserve 12 bytes locals
         ld      hl, #-12
         add     hl, sp
         ld      sp, hl
+
+        ;; restore HL (x.high)
+        ld      h, b
+        ld      l, c
+
+        ;; normalize dividend into internal order DE:HL = high:low
+        ;; incoming: DE low, HL high -> internal: DE high, HL low
+        ex      de, hl
 
         ;; remainder = 0
         xor     a
@@ -41,7 +51,7 @@ __divulong:
         ld      -6(ix), a
         ld      -5(ix), a
 
-        ;; copy divisor y into -12..-9
+        ;; copy divisor y into -12..-9 from 4..7(ix) (low..high)
         ld      a, 4(ix)
         ld      -12(ix), a
         ld      a, 5(ix)
@@ -51,21 +61,22 @@ __divulong:
         ld      a, 7(ix)
         ld      -9(ix), a
 
-        ;; unsigned 32/32 division via shift/subtract
+        ;; 32 iterations, restoring division
         ld      b, #32
 
 .u32_div_loop:
-        add     hl, hl                             ; x <<= 1 (low first)
+        ;; shift quotient (currently in de:hl) left by 1
+        add     hl, hl
         rl      e
         rl      d
 
-        ;; remainder <<= 1, bring in carry from x shift
+        ;; remainder <<= 1, bring in carry from dividend shift
         rl      -8(ix)
         rl      -7(ix)
         rl      -6(ix)
         rl      -5(ix)
 
-        ;; try remainder -= y
+        ;; try remainder -= divisor
         or      a                                  ; clear carry
         ld      a, -8(ix)
         sbc     a, -12(ix)
@@ -81,7 +92,8 @@ __divulong:
         ld      -5(ix), a
         jr      nc, .keep_sub
 
-        ;; restore if we borrowed
+        ;; borrow -> restore remainder (add divisor back)
+        or      a                                  ; CLEAR carry before adc!
         ld      a, -8(ix)
         adc     a, -12(ix)
         ld      -8(ix), a
@@ -97,20 +109,44 @@ __divulong:
         jr      .next_bit
 
 .keep_sub:
-        set     0, l                               ; quotient |= 1
+        set     0, l
+
 .next_bit:
         djnz    .u32_div_loop
 
-        ;; done: de:hl = quotient, remainder stored at -8..-5
-        ret                                        ; leave ix for helper
+        ;; store remainder to static cell
+        ld      a, -8(ix)
+        ld      (__last_remainder_ulong+0), a
+        ld      a, -7(ix)
+        ld      (__last_remainder_ulong+1), a
+        ld      a, -6(ix)
+        ld      (__last_remainder_ulong+2), a
+        ld      a, -5(ix)
+        ld      (__last_remainder_ulong+3), a
 
-        ;; __get_remainder_ulong
-        ;; inputs:  same frame as __divulong (ix valid)
-        ;; outputs: de:hl = remainder (unsigned 32-bit)
-        ;; clobbers: d, e, h, l
-__get_remainder_ulong:
-        ld      l, -8(ix)
-        ld      h, -7(ix)
-        ld      e, -6(ix)
-        ld      d, -5(ix)
+        ;; quotient currently internal (DE high, HL low) -> ABI wants (DE low, HL high)
+        ex      de, hl
+
+        ;; tear down frame
+        ld      sp, ix
+        pop     ix
         ret
+
+
+__get_remainder_ulong:
+        ;; returns last remainder from static cell as DE low, HL high
+        ld      hl, #__last_remainder_ulong
+        ld      e, (hl)
+        inc     hl
+        ld      d, (hl)
+        inc     hl
+        ld      a, (hl)
+        inc     hl
+        ld      h, (hl)
+        ld      l, a
+        ret
+
+
+        .area   _DATA
+__last_remainder_ulong:
+        .ds     4

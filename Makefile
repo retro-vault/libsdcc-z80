@@ -11,7 +11,6 @@ DOCKER_RUN = docker run --rm \
 # Default: build lib then run link-only tests
 all: tests
 	
-
 tests: lib
 	$(DOCKER_RUN) sh -c 'make -C test all'
 
