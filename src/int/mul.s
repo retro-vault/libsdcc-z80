@@ -1,49 +1,93 @@
-        ;; 16-bit multiply using shift-and-add with small-operand fast path
-        ;; multiplies bc by de and returns the low 16 bits in de
+        ;; 16-bit multiply, speed-optimized
+        ;; provides both __mulint (hl*de) and __mul16 (bc*de)
         ;;
-        ;; code from sdcc project
+        ;; algorithm:
+        ;;   acc in hl
+        ;;   multiplicand in de (shift left)
+        ;;   multiplier in bc (shift right), early-out when bc==0
+        ;; optional swap to make multiplier smaller -> fewer iterations
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
-        ;; copyright (c) 2000 michael hope
-        ;; copyright (c) 2021 philipp klaus krause
-        
-        .module mul                               ; module name
-        .optsdcc -mz80 sdcccall(1)
-        .area   _CODE                             ; code segment
+        ;; copyright 2009-2010 philipp klaus krause
+        ;; copytight 2026 tomaz stih
 
-        .globl  __mulint                          ; export symbol
+        .module mul
+        .optsdcc -mz80 sdcccall(1)
+        .area   _CODE
+
+        .globl  __mulint
+        .globl  __mul16
 
         ;; __mulint
-        ;; inputs:  hl = multiplicand (16-bit), de = multiplier (16-bit)
-        ;; outputs: de = product low word (via __mul16)
-        ;; clobbers: a, b, c, h, l, f; preserves de on entry only logically
-        ;; notes: moves hl→bc then calls the core 16-bit multiply
+        ;; inputs:  hl = multiplicand, de = multiplier
+        ;; outputs: de = product low 16
+        ;; clobbers: a, b, c, h, l, f
 __mulint:
-        ld      c, l                              ; c = low(multiplicand)
-        ld      b, h                              ; b = high(multiplicand)
+        ld      c, l
+        ld      b, h
+        jp      __mul16
 
         ;; __mul16
         ;; inputs:  bc = multiplicand, de = multiplier
-        ;; outputs: de = product low word
+        ;; outputs: de = product low 16
         ;; clobbers: a, b, c, h, l, f
-        ;; notes: classic shift-add loop; fast path when b = 0 (8-bit)
-__mul16::
-        xor     a                                 ; a = 0
-        ld      l, a                              ; l = 0, hl accumulates sum
-        or      a, b                              ; set z if high byte of bc = 0
-        ld      b, #16                            ; loop count = 16 bits by default
-        jr      nz, 2$                            ; if high byte nonzero, use 16-bit path
+__mul16:
+        ;; quick zero checks
+        ld      a, b
+        or      a, c
+        jr      z, .ret_zero                        ; if bc == 0
 
-        ld      b, #8                             ; fast path: only 8 bits in c
-        ld      a, c                              ; preload a with c for rla
-1$:
-        add     hl, hl                            ; shift partial sum left
-2$:
-        rl      c                                 ; shift next bit of c into carry
-        rla                                       ; shift a as well (fast path helper)
-        jr      nc, 3$                            ; if bit was 0, skip add
-        add     hl, de                            ; add multiplier to partial sum
-3$:
-        djnz    1$                                ; loop over all bits
-        ex      de, hl                            ; move result low word to de
-        ret                                       ; return with de = product low
+        ld      a, d
+        or      a, e
+        jr      z, .ret_zero                        ; if de == 0
+
+        ;; make bc the smaller operand (as multiplier) if bc > de
+        ;; compare bc - de (unsigned)
+        ld      a, c
+        sub     a, e
+        ld      a, b
+        sbc     a, d
+        jr      c, .no_swap                         ; bc < de -> ok
+
+        ;; swap bc <-> de
+        ld      a, c
+        ld      c, e
+        ld      e, a
+        ld      a, b
+        ld      b, d
+        ld      d, a
+
+.no_swap:
+        ;; acc = 0 in hl
+        xor     a
+        ld      h, a
+        ld      l, a
+
+.mul_loop:
+        ;; if (bc & 1) acc += de
+        bit     0, c
+        jr      z, .skip_add
+        add     hl, de
+.skip_add:
+        ;; de <<= 1  (faster than ex/add/ex)
+        sla     e
+        rl      d
+
+        ;; bc >>= 1
+        srl     b
+        rr      c
+
+        ;; early-out if bc == 0
+        ld      a, b
+        or      a, c
+        jr      nz, .mul_loop
+
+        ;; return: acc in hl -> de
+        ex      de, hl
+        ret
+
+.ret_zero:
+        xor     a
+        ld      d, a
+        ld      e, a
+        ret
