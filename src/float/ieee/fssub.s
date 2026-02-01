@@ -21,12 +21,15 @@
         .globl  ___fsadd
 
 ___fssub::
-        ld      ix,#0
-        add     ix,sp
+        push    hl              ; preserve a2/a3 (HL)
 
-        ;; b3 is at 5(ix): [retlo,rethi,b0,b1,b2,b3]
-        ld      a,5(ix)
+        ;; after push hl, SP moved by -2
+        ;; original b3 at (SP_old + 5) is now at (SP_new + 7)
+        ld      hl,#7
+        add     hl,sp
+        ld      a,(hl)
         xor     #0x80
-        ld      5(ix),a
+        ld      (hl),a
 
+        pop     hl              ; restore a2/a3
         jp      ___fsadd

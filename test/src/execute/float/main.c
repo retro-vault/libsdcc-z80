@@ -88,7 +88,6 @@ static int test_f32_add_basic(void) {
     fail(name); return 0;
 }
 
-
 static int test_f32_sub_basic(void) {
     const char *name = "f32 1.25 - (-2.5) == 3.75";
     float a = mk_f32(mk_u32(0x3FA00000UL));  /* 1.25 */
@@ -201,10 +200,10 @@ void main(void){
 
     total++; passed += test_f32_add_basic();
     total++; passed += test_f32_sub_basic();
+    total++; passed += test_f32_mul_basic();
 
     dump_fdebug();
 
-    //total++; passed += test_f32_mul_basic();
     //total++; passed += test_f32_div_basic();
     //total++; passed += test_f32_unary_sign();
     //total++; passed += test_f32_cmp_basic();
