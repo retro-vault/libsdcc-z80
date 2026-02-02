@@ -1,9 +1,16 @@
 # ------------------ configuration ------------------
 
-TARGET     := libsdcc-z80
+TARGET := libsdcc-z80
 
-BUILD_DIR  := $(abspath ../build)
-BIN_DIR    := $(abspath ../bin)
+# Allow injection from the command line:
+#   make BUILD_DIR=/abs/path BIN_DIR=/abs/path
+# Defaults are relative to this Makefile.
+BUILD_DIR ?= ../build
+BIN_DIR   ?= ../bin
+
+# Normalize to absolute paths after injection/defaulting.
+BUILD_DIR := $(abspath $(BUILD_DIR))
+BIN_DIR   := $(abspath $(BIN_DIR))
 
 # Force SDCC toolchain
 override CC := sdcc
@@ -27,7 +34,7 @@ C_OBJS := $(addprefix $(BUILD_DIR)/,$(C_SRCS_N:.c=.rel))
 S_OBJS := $(addprefix $(BUILD_DIR)/,$(S_SRCS_N:.s=.rel))
 OBJS   := $(C_OBJS) $(S_OBJS)
 
-LIB    := $(BIN_DIR)/$(TARGET).lib
+LIB := $(BIN_DIR)/$(TARGET).lib
 
 # ------------------ rules ------------------
 
@@ -53,4 +60,4 @@ $(BIN_DIR):
 
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -rf $(BIN_DIR)
+	rm -f $(LIB)

@@ -1,80 +1,102 @@
 ![status.badge] [![language.badge]][language.url] [![standard.badge]][standard.url] [![license.badge]][license.url]
 
-# The SDCC Z80 bare metal library
+# libsdcc-z80
 
-## What is **SDCC bare metal programming**?
+## introduction
 
-It's when you use the *SDCC* C compiler without default startup code, header files, and libraries (using switches `--nostdlib`, `--nostdinc`, 
-and `--no-std-crt0`). An example of this would be targeting a non-supported *Z80* architecture or building an operating system.
+**libsdcc-z80** is a bare-metal runtime library for the *SDCC* C compiler targeting
+the *Z80* processor. It is intended for builds where the standard SDCC runtime is
+disabled using `--nostdlib`, `--nostdinc`, and `--no-std-crt0`.
 
-**libsdcc-z80** is the glue betweeen the *SDCC* C compiler and the
-*Z80* processor. *Z80* lacks instructions for integer and floating point arithmetics.
+In this mode, SDCC does not provide startup code or runtime support. This is
+commonly used when targeting custom or unsupported Z80 systems, or when writing
+firmware or operating systems with full control over memory layout and startup.
 
-To mitigate it, the *SDCC* C compiler replaces these non-existing
-instructions with calls to special functions (such as: `__mulint`).
-Invisible to you, the linker then links these special functions 
-with your code.
+The *Z80* processor lacks native support for many C language operations, such as
+integer and floating-point arithmetic and certain type conversions. SDCC replaces
+these operations with calls to helper functions, which are normally supplied by
+the standard runtime.
 
-This works in the *SDCC* realm, but if you prevent the compiler to link
-default *SDCC* libraries then you need to provide these special functions, and the **libsdcc-z80** does that.
+**libsdcc-z80** provides these missing helper routines as optimized Z80 assembly.
+The C source code remains unchanged, helper calls are generated automatically by
+the compiler, and all symbols are resolved by the linker.
 
-## How do I compile the libsdcc-z80?
+## features
 
-Use `make` command in the root directory to compile *libsdcc-z80*. This will build the library inside the  `build` directory and copy the binary `libsdcc-z80.lib` into the `bin` directory.
+- 100% Z80 assembly (zero C in the runtime)
+- Optimized for speed
+- Supports `int`, `long`, `long long`, `float`
+- Full coverage of arithmetic, comparisons, shifts, and type conversions
+- Docker-based build (no local toolchain required)
+- Comprehensive ZX Spectrum automated tests
 
-### Can I skip the compilation?
+# building
 
-Yes you can. Latest version of precompiled library is always available in the `bin` directory.
+## using makefile
 
-### Can I use custom build and bin folders?
+The project is built using `make` and runs entirely inside Docker. No local SDCC installation is required.
 
-Yes. To compile this project from your project, pass absolute directories as variables `BUILD_DIR` and `BIN_DIR`.
-
-`make BUILD_DIR=~/myproj/build BIN_DIR=~/myproj/bin`
-
-## Is there a sample available?
-
-Check the `sample` directory! It contains a complete bare metal *Z80* program and startup code for *ZX Spectrum 48K* that compiles to the `0x8000` address (data segment to `0x8100`) and uses basic `long`, `long long`, and `float` operations.
-
- > A `Makefile` in this directory was deliberately stripped of all 
- > complexity so you can learn how the compilation works by reading it.
-
-## How do I create a bare metal program?
-
-First you need a startup code. This is a code that is executed before your C program `main()` function is called. By convention you should call it `crt0.s` (*the C runtime*). This code must prepare the layout for your C program: configure the areas, initialize static variables, set the stack pointer, and jump to your `main()` function. You can find an example of `crt0.s` in the `sample` folder. Then you need to write your C program. When you have both, you compile and link them with `libsdcc-z80.lib`. 
-
- > When linking you must pass `crt0.rel` as the first linker file! 
-
-Here is the compilation process that produces `test.bin` from `test.c`.
-
-~~~z80
-# Assemble crt0.s
-sdasz80 -xlos -g crt0.s
-
-# Compile test.c
-sdcc -o test.rel \
-     -c --std-c11 -mz80 --debug \
-     --nostdinc --no-std-crt0 --nostdlib \
-     test.c
-    
-# Link both
-sdcc -o test.ihx \
-     -mz80 -Wl -y \
-     --code-loc 0x8000 --data-loc 0x8600 \
-     --std-c11 -mz80 --debug\
-     --no-std-crt0 --nostdinc --nostdlib \
-     -L../bin -llibsdcc-z80 \
-     crt0.rel test.rel
-
-# Finally, convert ihx to binary
-sdobjcopy -I ihex -O binary test.ihx test.bin
+~~~sh
+make          # build library and tests
+make lib      # build library only
+make clean
 ~~~
 
-And, voila, your `test.bin` is ready.
+The library is placed in the `bin/` directory.
+
+To integrate the build into another project, override the output directories using relative paths:
+
+~~~sh
+make BUILD_DIR=obj BIN_DIR=output
+~~~
+
+> **Note**  
+> When custom output directories are used, the same variables must also be
+> provided when cleaning:
+>
+> ~~~sh
+> make BUILD_DIR=obj BIN_DIR=output clean
+> ~~~
+
+## directory structure
+
+The project is split into a small runtime library and a ZX Spectrum–based test suite.  
+All builds run inside Docker.
+
+~~~text
+.
+├── Makefile
+├── src/
+│   ├── int/
+│   └── float/
+└── test/
+    ├── lib/
+    ├── include/
+    └── src/
+        ├── compile/
+        └── execute/
+~~~
+
+| path                     | description |
+|--------------------------|-------------|
+| `Makefile`               | Top-level build entry point. Pulls the Docker image and delegates builds to subdirectories. |
+| `src/`                   | `libsdcc-z80` runtime library (Z80 assembly only). |
+| `src/int/`               | Integer arithmetic and helper routines. |
+| `src/float/`             | Floating-point arithmetic and helper routines. |
+| `test/`                  | ZX Spectrum test suite and bare-metal SDCC examples. |
+| `test/lib/`              | ZX Spectrum–specific support code and `crt0`. |
+| `test/include/`          | Header files used by tests. |
+| `test/src/`              | Test sources. |
+| `test/src/compile/`      | Compile-only tests (symbol resolution, no binaries produced). |
+| `test/src/execute/`      | Runtime ZX Spectrum tests for integer and floating-point operations. |
+
+> **Note**  
+> All builds use the Docker image  
+> [`wischner/sdcc-z80-zx-spectrum:latest`](https://hub.docker.com/r/wischner/sdcc-z80-zx-spectrum)
 
 ## How do I leave feedback?
 
-Use the GitHub *Issues* on top of this page. 
+Use the GitHub Issues at the top of this page.
 
 [language.url]:   https://en.wikipedia.org/wiki/ANSI_C
 [language.badge]: https://img.shields.io/badge/language-C-blue.svg

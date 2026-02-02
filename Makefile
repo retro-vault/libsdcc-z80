@@ -1,25 +1,48 @@
+# Top-level Makefile: fix clean to work with overridden BUILD_DIR/BIN_DIR
+
 # Docker settings.
 DOCKER_IMAGE ?= wischner/sdcc-z80-zx-spectrum:latest
 WORKDIR      := $(PWD)
 
-# Run container mounting the repo at /work; keep host ownership for outputs
+# Output directories (relative to repo root by default).
+BUILD_DIR ?= build
+BIN_DIR   ?= bin
+
+# Paths as seen inside the container.
+ROOT_DOCKER := /work
+ifneq ($(filter /%,$(BUILD_DIR)),)
+BUILD_DIR_DOCKER := $(BUILD_DIR)
+else
+BUILD_DIR_DOCKER := $(ROOT_DOCKER)/$(BUILD_DIR)
+endif
+
+ifneq ($(filter /%,$(BIN_DIR)),)
+BIN_DIR_DOCKER := $(BIN_DIR)
+else
+BIN_DIR_DOCKER := $(ROOT_DOCKER)/$(BIN_DIR)
+endif
+
+# Run container mounting the repo at /work; keep host ownership for outputs.
 DOCKER_RUN = docker run --rm \
              -u $$(id -u):$$(id -g) \
              -v "$(WORKDIR):/work" -w /work \
              $(DOCKER_IMAGE)
 
-# Default: build lib then run link-only tests
-all: tests
-	
-tests: lib
-	$(DOCKER_RUN) sh -c 'make -C test all'
+.PHONY: all tests lib clean
 
-# Build library inside Docker using src/Makefile (artifacts -> ./build & ./bin)
-lib: 
-	$(DOCKER_RUN) sh -c 'make -C src all'
+all: tests
+
+tests: lib
+	$(DOCKER_RUN) sh -c '$(MAKE) -C test \
+		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" all'
+
+lib:
+	$(DOCKER_RUN) sh -c '$(MAKE) -C src \
+		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" all'
 
 clean:
-	rm -rf build
-	rm -rf bin
-
-.PHONY: all tests lib clean
+	$(DOCKER_RUN) sh -c '$(MAKE) -C src \
+		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" clean'
+	$(DOCKER_RUN) sh -c '$(MAKE) -C test \
+		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" clean'
+	rm -rf $(BUILD_DIR) $(BIN_DIR)

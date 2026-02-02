@@ -1,25 +1,41 @@
 # -------- test/src/execute/Makefile (c-only, two ZX Spectrum TAPs) --------
 
-ROOT      := $(abspath $(CURDIR)/../../..)
-SRC_DIR   := .
-BUILD_DIR := $(ROOT)/build/test/execute
-BIN_DIR   := $(ROOT)/bin
+ROOT := $(abspath $(CURDIR)/../../..)
+SRC_DIR := .
+
+# Injected by parent makefiles. If relative, treat as repo-root relative.
+BUILD_DIR ?= $(ROOT)/build
+BIN_DIR   ?= $(ROOT)/bin
+
+ifneq ($(filter /%,$(BUILD_DIR)),)
+BUILD_DIR := $(abspath $(BUILD_DIR))
+else
+BUILD_DIR := $(abspath $(ROOT)/$(BUILD_DIR))
+endif
+
+ifneq ($(filter /%,$(BIN_DIR)),)
+BIN_DIR := $(abspath $(BIN_DIR))
+else
+BIN_DIR := $(abspath $(ROOT)/$(BIN_DIR))
+endif
+
+EXEC_BUILD_DIR := $(BUILD_DIR)/test/execute
 
 LOAD_ADDR_HEX ?= 0x8000
 LOAD_ADDR_DEC ?= 32768
 
-CC       := sdcc
-LD       := sdldz80
-OBJCOPY  := sdobjcopy
-BIN2TAP  := bin2tap
+CC      := sdcc
+LD      := sdldz80
+OBJCOPY := sdobjcopy
+BIN2TAP := bin2tap
 
-CFLAGS   := --std-c11 -mz80 --debug \
-            --no-std-crt0 --nostdinc --nostdlib \
-            -I. -I$(ROOT)/test/include
+CFLAGS := --std-c11 -mz80 --debug \
+          --no-std-crt0 --nostdinc --nostdlib \
+          -I. -I$(ROOT)/test/include
 
-CRT0_REL := $(abspath $(BIN_DIR))/crt0zx.rel
-LIB_MAIN := $(abspath $(BIN_DIR))/libsdcc-z80.lib
-LIB_ZX   := $(abspath $(BIN_DIR))/libzx.lib
+CRT0_REL := $(BIN_DIR)/crt0zx.rel
+LIB_MAIN := $(BIN_DIR)/libsdcc-z80.lib
+LIB_ZX   := $(BIN_DIR)/libzx.lib
 
 ITAP := $(BIN_DIR)/itestzx.tap
 FTAP := $(BIN_DIR)/ftestzx.tap
@@ -34,18 +50,18 @@ float: $(FTAP)
 INT_C_SRCS   := $(wildcard $(SRC_DIR)/int/*.c)
 FLOAT_C_SRCS := $(wildcard $(SRC_DIR)/float/*.c)
 
-# Objects (preserve subdirs under execute/)
-INT_C_OBJS   := $(abspath $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.rel,$(INT_C_SRCS)))
-FLOAT_C_OBJS := $(abspath $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.rel,$(FLOAT_C_SRCS)))
+# Objects (absolute; preserve subdirs under execute/)
+INT_C_OBJS   := $(abspath $(patsubst $(SRC_DIR)/%.c,$(EXEC_BUILD_DIR)/%.rel,$(INT_C_SRCS)))
+FLOAT_C_OBJS := $(abspath $(patsubst $(SRC_DIR)/%.c,$(EXEC_BUILD_DIR)/%.rel,$(FLOAT_C_SRCS)))
 
 # Outputs
-IHX_INT   := $(abspath $(BUILD_DIR))/int/itestzx.ihx
-BIN_INT   := $(abspath $(BUILD_DIR))/int/itestzx.bin
-LK_INT    := $(abspath $(BUILD_DIR))/int/itestzx.lk
+IHX_INT   := $(EXEC_BUILD_DIR)/int/itestzx.ihx
+BIN_INT   := $(EXEC_BUILD_DIR)/int/itestzx.bin
+LK_INT    := $(EXEC_BUILD_DIR)/int/itestzx.lk
 
-IHX_FLOAT := $(abspath $(BUILD_DIR))/float/ftestzx.ihx
-BIN_FLOAT := $(abspath $(BUILD_DIR))/float/ftestzx.bin
-LK_FLOAT  := $(abspath $(BUILD_DIR))/float/ftestzx.lk
+IHX_FLOAT := $(EXEC_BUILD_DIR)/float/ftestzx.ihx
+BIN_FLOAT := $(EXEC_BUILD_DIR)/float/ftestzx.bin
+LK_FLOAT  := $(EXEC_BUILD_DIR)/float/ftestzx.lk
 
 # --- link via generated .lk (ALL ABSOLUTE PATHS; no -l) ---
 $(IHX_INT): $(CRT0_REL) $(INT_C_OBJS) $(LIB_MAIN) $(LIB_ZX)
@@ -55,11 +71,11 @@ $(IHX_INT): $(CRT0_REL) $(INT_C_OBJS) $(LIB_MAIN) $(LIB_ZX)
 	  echo "-i"; \
 	  echo "-m"; \
 	  echo "-j"; \
-	  echo "-o $(IHX_INT)"; \
-	  echo "$(CRT0_REL)"; \
+	  echo "-o $(abspath $(IHX_INT))"; \
+	  echo "$(abspath $(CRT0_REL))"; \
 	  for obj in $(INT_C_OBJS); do echo "$$obj"; done; \
-	  echo "$(LIB_MAIN)"; \
-	  echo "$(LIB_ZX)"; \
+	  echo "$(abspath $(LIB_MAIN))"; \
+	  echo "$(abspath $(LIB_ZX))"; \
 	} > "$(LK_INT)"
 	$(LD) -f "$(LK_INT)"
 
@@ -70,11 +86,11 @@ $(IHX_FLOAT): $(CRT0_REL) $(FLOAT_C_OBJS) $(LIB_MAIN) $(LIB_ZX)
 	  echo "-i"; \
 	  echo "-m"; \
 	  echo "-j"; \
-	  echo "-o $(IHX_FLOAT)"; \
-	  echo "$(CRT0_REL)"; \
+	  echo "-o $(abspath $(IHX_FLOAT))"; \
+	  echo "$(abspath $(CRT0_REL))"; \
 	  for obj in $(FLOAT_C_OBJS); do echo "$$obj"; done; \
-	  echo "$(LIB_MAIN)"; \
-	  echo "$(LIB_ZX)"; \
+	  echo "$(abspath $(LIB_MAIN))"; \
+	  echo "$(abspath $(LIB_ZX))"; \
 	} > "$(LK_FLOAT)"
 	$(LD) -f "$(LK_FLOAT)"
 
@@ -95,10 +111,10 @@ $(FTAP): $(BIN_FLOAT)
 	$(BIN2TAP) -b -o "$@" -a $(LOAD_ADDR_DEC) "$(BIN_FLOAT)"
 
 # --- compile rule (keeps int/... and float/... structure) ---
-$(BUILD_DIR)/%.rel: $(SRC_DIR)/%.c
+$(EXEC_BUILD_DIR)/%.rel: $(SRC_DIR)/%.c
 	mkdir -p "$(dir $@)"
 	$(CC) $(CFLAGS) -c -o "$(abspath $@)" "$<"
 
 clean:
-	rm -rf "$(BUILD_DIR)"
+	rm -rf "$(EXEC_BUILD_DIR)"
 	rm -f "$(ITAP)" "$(FTAP)"
