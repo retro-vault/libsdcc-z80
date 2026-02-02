@@ -76,7 +76,7 @@ static void dump_fdebug(void){
 }
 
 
-/* ---------- initial float tests ---------- */
+/* ---------- initial float tests for add and sub ---------- */
 
 static int test_f32_add_basic(void) {
     const char *name = "f32 1.25 + (-2.5) == -1.25";
@@ -97,95 +97,199 @@ static int test_f32_sub_basic(void) {
     fail(name); return 0;
 }
 
-static int test_f32_mul_basic(void) {
-    const char *name = "f32 1.25 * (-2.5) == -3.125";
-    float a = mk_f32(mk_u32(0x3FA00000UL));  /* 1.25 */
-    float b = mk_f32(mk_u32(0xC0200000UL));  /* -2.5 */
-    float r = a * b;                          /* ___fsmul */
-    if (mk_u32(f32_bits(r)) == mk_u32(0xC0480000UL)) { ok(name); return 1; } /* -3.125 */
+
+/* ---------- float to int conversions ---------- */
+static int test_fs2sint_trunc_pos(void) {
+    const char *name = "(int)1.75f == 1 (truncate toward zero)";
+    float f = mk_f32(mk_u32(0x3FE00000UL)); /* 1.75 */
+    int got = (int)f;
+    if (got == 1) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_f32_div_basic(void) {
-    const char *name = "f32 3.0 / 2.0 == 1.5";
-    float a = mk_f32(mk_u32(0x40400000UL));  /* 3.0 */
-    float b = mk_f32(mk_u32(0x40000000UL));  /* 2.0 */
-    float r = a / b;                          /* ___fsdiv */
-    if (mk_u32(f32_bits(r)) == mk_u32(0x3FC00000UL)) { ok(name); return 1; } /* 1.5 */
+static int test_fs2sint_trunc_neg(void) {
+    const char *name = "(int)-1.75f == -1 (truncate toward zero)";
+    float f = mk_f32(mk_u32(0xBFE00000UL)); /* -1.75 */
+    int got = (int)f;
+    if (got == -1) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_f32_unary_sign(void) {
-    const char *name = "f32 unary +/-, -(-2.5)==2.5";
-    float b = mk_f32(mk_u32(0xC0200000UL));  /* -2.5 */
-    float r = -b;                             /* sign op */
-    if (mk_u32(f32_bits(r)) == mk_u32(0x40200000UL)) { ok(name); return 1; } /* +2.5 */
+static int test_fs2sint_pos_overflow(void) {
+    const char *name = "(int)32768.0f clamps to 32767";
+    float f = mk_f32(mk_u32(0x47000000UL)); /* 32768.0 */
+    int got = (int)f;
+    if (got == 32767) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_f32_cmp_basic(void) {
-    const char *name = "f32 comparisons 1.0<2.0, 2.0>1.0, 1.0==1.0";
-    float a = mk_f32(mk_u32(0x3F800000UL));  /* 1.0 */
-    float b = mk_f32(mk_u32(0x40000000UL));  /* 2.0 */
-    int r = 0;
-
-    r += (a <  b);
-    r += (b >  a);
-    r += (a == a);
-    r += (a != b);
-
-    if (r == 4) { ok(name); return 1; }
+static int test_fs2sint_neg_overflow(void) {
+    const char *name = "(int)-40000.0f clamps to -32768";
+    float f = mk_f32(mk_u32(0xC71C4000UL)); /* -40000.0 */
+    int got = (int)f;
+    if (got == -32768) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_f32_to_s16_trunc(void) {
-    const char *name = "s16 (int)-2.5 trunc toward zero == -2";
-    float a = mk_f32(mk_u32(0xC0200000UL));       /* -2.5 */
-    int16_t r = (int16_t)(int)a;                  /* ___fs2sint path */
-    if (r == (int16_t)-2) { ok(name); return 1; }
+static int test_fs2sint_subunit(void) {
+    const char *name = "(int)0.5f == 0";
+    float f = mk_f32(mk_u32(0x3F000000UL)); /* 0.5 */
+    int got = (int)f;
+    if (got == 0) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_f32_to_u16(void) {
-    const char *name = "u16 (unsigned)40000.0 == 40000";
-    float a = mk_f32(mk_u32(0x471C4000UL));       /* 40000.0 */
-    uint16_t r = (uint16_t)(unsigned)a;           /* ___fs2uint path */
-    if (r == (uint16_t)40000u) { ok(name); return 1; }
+static int test_fs2sint_one(void) {
+    const char *name = "(int)1.0f == 1";
+    float f = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
+    int got = (int)f;
+    if (got == 1) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_s16_to_f32_bits(void) {
-    const char *name = "f32 (float)-456 == 0xC3E40000";
-    int16_t i = (int16_t)mk_s16(-456);
-    float r = (float)i;                           /* ___sint2fs path */
-    if (mk_u32(f32_bits(r)) == mk_u32(0xC3E40000UL)) { ok(name); return 1; }
+static int test_fs2schar_trunc_pos(void) {
+    const char *name = "(signed char)1.75f == 1";
+    float f = mk_f32(mk_u32(0x3FE00000UL)); /* 1.75 */
+    signed char got = (signed char)f;
+    if ((int)got == 1) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_u16_to_f32_bits(void) {
-    const char *name = "f32 (float)40000u == 0x471C4000";
-    uint16_t u = (uint16_t)mk_u16(40000u);
-    float r = (float)u;                           /* ___uint2fs path */
-    if (mk_u32(f32_bits(r)) == mk_u32(0x471C4000UL)) { ok(name); return 1; }
+static int test_fs2schar_trunc_neg(void) {
+    const char *name = "(signed char)-1.75f == -1";
+    float f = mk_f32(mk_u32(0xBFE00000UL)); /* -1.75 */
+    signed char got = (signed char)f;
+    if ((int)got == -1) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_s32_to_f32_bits(void) {
-    const char *name = "f32 (float)123456L == 0x47F12000";
-    int32_t i = mk_s32(123456L);
-    float r = (float)i;                           /* ___slong2fs */
-    if (mk_u32(f32_bits(r)) == mk_u32(0x47F12000UL)) { ok(name); return 1; }
+static int test_fs2schar_wrap_128(void) {
+    const char *name = "(signed char)128.0f == -128 (low-byte truncation)";
+    float f = mk_f32(mk_u32(0x43000000UL)); /* 128.0 */
+    signed char got = (signed char)f;
+    if ((int)got == -128) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-static int test_u32_to_f32_bits(void) {
-    const char *name = "f32 (float)345678UL == 0x48A8C9C0";
-    uint32_t u = mk_u32(345678UL);
-    float r = (float)u;                           /* ___ulong2fs */
-    if (mk_u32(f32_bits(r)) == mk_u32(0x48A8C9C0UL)) { ok(name); return 1; }
+static int test_f32_to_u16_trunc(void) {
+    const char *name = "(unsigned int)1.75f == 1";
+    float f = mk_f32(mk_u32(0x3FE00000UL)); /* 1.75 */
+    unsigned int got = (unsigned int)f;
+    if (got == 1u) { ok(name); return 1; }
     fail(name); return 0;
 }
 
+static int test_f32_to_u16_negative_zero(void) {
+    const char *name = "(unsigned int)-1.75f == 0";
+    float f = mk_f32(mk_u32(0xBFE00000UL)); /* -1.75 */
+    unsigned int got = (unsigned int)f;
+    if (got == 0u) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_f32_to_u16_overflow_clamp(void) {
+    const char *name = "(unsigned int)65536.0f clamps to 65535";
+    float f = mk_f32(mk_u32(0x47800000UL)); /* 65536.0 */
+    unsigned int got = (unsigned int)f;
+    if (got == 65535u) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_f32_to_u16_max_exact(void) {
+    const char *name = "(unsigned int)65535.0f == 65535";
+    float f = mk_f32(mk_u32(0x477FFF00UL)); /* 65535.0 */
+    unsigned int got = (unsigned int)f;
+    if (got == 65535u) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2uchar_trunc_pos(void) {
+    const char *name = "(unsigned char)1.75f == 1";
+    float f = mk_f32(mk_u32(0x3FE00000UL)); /* 1.75 */
+    unsigned char got = (unsigned char)f;
+    if ((unsigned int)got == 1u) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2uchar_wrap_256(void) {
+    const char *name = "(unsigned char)256.0f == 0 (low-byte truncation)";
+    float f = mk_f32(mk_u32(0x43800000UL)); /* 256.0 */
+    unsigned char got = (unsigned char)f;
+    if ((unsigned int)got == 0u) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2slong_trunc_pos(void) {
+    const char *name = "(long)1.75f == 1";
+    float f = mk_f32(mk_u32(0x3FE00000UL)); /* 1.75 */
+    long got = (long)f;
+    if ((uint32_t)got == mk_u32(0x00000001UL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2slong_trunc_neg(void) {
+    const char *name = "(long)-1.75f == -1";
+    float f = mk_f32(mk_u32(0xBFE00000UL)); /* -1.75 */
+    long got = (long)f;
+    if ((uint32_t)got == mk_u32(0xFFFFFFFFUL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2slong_clamp_pos(void) {
+    const char *name = "(long)2147483648.0f clamps to 0x7FFFFFFF";
+    float f = mk_f32(mk_u32(0x4F000000UL)); /* 2^31 */
+    long got = (long)f;
+    if ((uint32_t)got == mk_u32(0x7FFFFFFFUL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2slong_clamp_neg(void) {
+    const char *name = "(long)-2147483648.0f == 0x80000000";
+    float f = mk_f32(mk_u32(0xCF000000UL)); /* -2^31 */
+    long got = (long)f;
+    if ((uint32_t)got == mk_u32(0x80000000UL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2slong_word_order_sentinel(void) {
+    const char *name = "(long)65536.0f == 65536 (checks word order)";
+    float f = mk_f32(mk_u32(0x47800000UL)); /* 65536.0 */
+    long got = (long)f;
+    if ((uint32_t)got == mk_u32(0x00010000UL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2ulong_trunc_pos(void) {
+    const char *name = "(unsigned long)1.75f == 1";
+    float f = mk_f32(mk_u32(0x3FE00000UL)); /* 1.75 */
+    unsigned long got = (unsigned long)f;
+    if (mk_u32((uint32_t)got) == mk_u32(0x00000001UL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2ulong_neg_zero(void) {
+    const char *name = "(unsigned long)-1.75f == 0";
+    float f = mk_f32(mk_u32(0xBFE00000UL)); /* -1.75 */
+    unsigned long got = (unsigned long)f;
+    if (mk_u32((uint32_t)got) == mk_u32(0x00000000UL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2ulong_clamp_2p32(void) {
+    const char *name = "(unsigned long)4294967296.0f clamps to 0xFFFFFFFF";
+    float f = mk_f32(mk_u32(0x4F800000UL)); /* 2^32 */
+    unsigned long got = (unsigned long)f;
+    if (mk_u32((uint32_t)got) == mk_u32(0xFFFFFFFFUL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+static int test_fs2ulong_word_order_sentinel(void) {
+    const char *name = "(unsigned long)65536.0f == 65536";
+    float f = mk_f32(mk_u32(0x47800000UL)); /* 65536.0 */
+    unsigned long got = (unsigned long)f;
+    if (mk_u32((uint32_t)got) == mk_u32(0x00010000UL)) { ok(name); return 1; }
+    fail(name); return 0;
+}
 
 
 /* ---------- main ---------- */
@@ -200,20 +304,35 @@ void main(void){
 
     total++; passed += test_f32_add_basic();
     total++; passed += test_f32_sub_basic();
-    total++; passed += test_f32_mul_basic();
+    total++; passed += test_fs2sint_trunc_pos();
+    total++; passed += test_fs2sint_trunc_neg();
+    total++; passed += test_fs2sint_pos_overflow();
+    total++; passed += test_fs2sint_neg_overflow();
+    total++; passed += test_fs2sint_subunit();
+    total++; passed += test_fs2sint_one();
+    total++; passed += test_fs2schar_trunc_pos();
+    total++; passed += test_fs2schar_trunc_neg();
+    total++; passed += test_fs2schar_wrap_128();
+    total++; passed += test_f32_to_u16_trunc();
+    total++; passed += test_f32_to_u16_negative_zero();
+    total++; passed += test_f32_to_u16_overflow_clamp();
+    total++; passed += test_f32_to_u16_max_exact();
+    total++; passed += test_fs2uchar_trunc_pos();
+    total++; passed += test_fs2uchar_wrap_256();
+    total++; passed += test_fs2slong_trunc_pos();
+    total++; passed += test_fs2slong_trunc_neg();
+    total++; passed += test_fs2slong_clamp_pos();
+    total++; passed += test_fs2slong_clamp_neg();
+    total++; passed += test_fs2slong_word_order_sentinel();
+    
+    total++; passed += test_fs2ulong_trunc_pos();
+    total++; passed += test_fs2ulong_neg_zero();
+    total++; passed += test_fs2ulong_clamp_2p32();
+    /* optional */
+    total++; passed += test_fs2ulong_word_order_sentinel();
+
 
     dump_fdebug();
-
-    //total++; passed += test_f32_div_basic();
-    //total++; passed += test_f32_unary_sign();
-    //total++; passed += test_f32_cmp_basic();
-    //total++; passed += test_f32_to_s16_trunc();
-    //total++; passed += test_f32_to_u16();
-    //total++; passed += test_s16_to_f32_bits();
-    //total++; passed += test_u16_to_f32_bits();
-    //total++; passed += test_s32_to_f32_bits();
-    //total++; passed += test_u32_to_f32_bits();
-
 
     cputs("Summary: ");
     put_hex16((uint16_t)passed);

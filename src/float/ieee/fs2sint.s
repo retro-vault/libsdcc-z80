@@ -1,9 +1,10 @@
         ;; float -> signed int (ieee-754 single) for sdcc z80
         ;; converts 32-bit float to 16-bit signed int with truncation toward zero.
+        ;;
         ;; behavior:
-        ;;   |x| < 1 -> 0
-        ;;   x >=  32768 ->  32767
-        ;;   x <= -32768 -> -32768
+        ;;   |x| < 1        -> 0
+        ;;   x >=  32768    ->  32767
+        ;;   x <= -32768    -> -32768
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2025 tomaz stih
@@ -14,26 +15,28 @@
         .area   _CODE
 
         ;; ___fs2sint
-        ;; inputs:  (stack) float a
-        ;; outputs: hl = (int)a
+        ;; inputs:  float a in hl:de (sdcccall(1), observed)
+        ;; outputs: de = (int)a      (caller does ex de,hl)
         ;; clobbers: af, bc, de, hl
         .globl  ___fs2sint
 ___fs2sint:
-        ; pop return, fetch arg (low then high), restore ret
-        pop     de              ; DE <- return address
-        pop     hl              ; HL <- low word
-        pop     bc              ; BC <- high word
-        push    bc
-        push    hl
-        push    de
+        ;; swap so:
+        ;;   BC = high word
+        ;;   HL = low word
+        ex      de,hl
+        ld      b,d
+        ld      c,e
 
-        ; sign?
+        ;; sign?
         ld      a,b
         and     #0x80
-        jr      z, .pos
+        jp      z, .pos
 
-        ; negative: compute magnitude using same path as unsigned, then negate with clamp
-        ; exponent e
+        ;; ----------------------------
+        ;; negative
+        ;; ----------------------------
+
+        ;; extract exponent
         ld      a,b
         and     #0x7F
         rla
@@ -45,30 +48,44 @@ ___fs2sint:
 .neg_e_low:
         ld      a,e
         sub     #127
+        ld      e,a                 ;; unbiased exponent
+
         jr      nc, .neg_e_nonneg
+
+        ;; |x| < 1 -> 0
         xor     a
         ld      h,a
         ld      l,a
+        ld      d,h
+        ld      e,l
         ret
+
 .neg_e_nonneg:
+        ld      a,e
         cp      #15
         jr      c, .neg_within
-        ; magnitude >= 2^15 -> clamp to -32768
+
+        ;; clamp to -32768
         ld      hl,#0x8000
+        ld      d,h
+        ld      e,l
         ret
+
 .neg_within:
-        ; build mantissa D:B:C = 1.xxx (24-bit)
+        ;; build mantissa D:B:C = 1.xxx (24-bit)
         ld      a,c
         and     #0x7F
         or      #0x80
         ld      d,a
         ld      b,h
         ld      c,l
-        ; shift as in fs2uint to get magnitude (unsigned) in HL
+
+        ;; shift magnitude
         ld      a,e
         cp      #24
         jr      c, .neg_sr
         sub     #23
+
 .neg_sl_loop:
         sla     c
         rl      b
@@ -77,15 +94,8 @@ ___fs2sint:
         jr      nz, .neg_sl_loop
         ld      h,d
         ld      l,b
-        ; negate: result = -HL  (truncate already done)
-        ld      a,l
-        cpl
-        ld      l,a
-        ld      a,h
-        cpl
-        ld      h,a
-        inc     hl
-        ret
+        jr      .neg_apply
+
 .neg_sr:
         ld      a,#23
         sub     e
@@ -97,7 +107,9 @@ ___fs2sint:
         jr      nz, .neg_rsh_loop
         ld      h,b
         ld      l,c
-        ; negate
+
+.neg_apply:
+        ;; negate HL
         ld      a,l
         cpl
         ld      l,a
@@ -105,11 +117,17 @@ ___fs2sint:
         cpl
         ld      h,a
         inc     hl
+
+        ld      d,h
+        ld      e,l
         ret
 
+        ;; ----------------------------
+        ;; positive
+        ;; ----------------------------
+
 .pos:
-        ; positive path == fs2uint with 16-bit clamp
-        ; exponent e
+        ;; extract exponent
         ld      a,b
         and     #0x7F
         rla
@@ -121,27 +139,44 @@ ___fs2sint:
 .pos_e_low:
         ld      a,e
         sub     #127
+        ld      e,a                 ;; unbiased exponent
+
         jr      nc, .pos_e_nonneg
+
+        ;; |x| < 1 -> 0
         xor     a
         ld      h,a
         ld      l,a
+        ld      d,h
+        ld      e,l
         ret
+
 .pos_e_nonneg:
+        ld      a,e
         cp      #15
         jr      c, .pos_within
+
+        ;; clamp to +32767
         ld      hl,#0x7FFF
+        ld      d,h
+        ld      e,l
         ret
+
 .pos_within:
+        ;; build mantissa D:B:C = 1.xxx
         ld      a,c
         and     #0x7F
         or      #0x80
         ld      d,a
         ld      b,h
         ld      c,l
+
+        ;; shift magnitude
         ld      a,e
         cp      #24
         jr      c, .pos_sr
         sub     #23
+
 .pos_sl_loop:
         sla     c
         rl      b
@@ -150,7 +185,8 @@ ___fs2sint:
         jr      nz, .pos_sl_loop
         ld      h,d
         ld      l,b
-        ret
+        jr      .pos_done
+
 .pos_sr:
         ld      a,#23
         sub     e
@@ -162,4 +198,8 @@ ___fs2sint:
         jr      nz, .pos_rsh_loop
         ld      h,b
         ld      l,c
+
+.pos_done:
+        ld      d,h
+        ld      e,l
         ret

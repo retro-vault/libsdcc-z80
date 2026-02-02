@@ -13,11 +13,10 @@
         .globl  ___fs2uint
 
         ;; ___fs2uchar
-        ;; inputs:  (stack) float a
-        ;; outputs: hl (L) = (unsigned char)a
+        ;; inputs:  float a in hl:de (same ABI chain as ___fs2uint)
+        ;; outputs: a = (unsigned char)a
         ;; clobbers: af, bc, de, hl
 ___fs2uchar:
-        ; tail-call core and keep only L
-        call    ___fs2uint
-        ; HL already has uint16 result; L is the uchar
+        call    ___fs2uint       ; de = uint16 result
+        ld      a,e              ; return low byte in A
         ret

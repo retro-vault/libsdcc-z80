@@ -1,5 +1,5 @@
         ;; float -> signed char (ieee-754 single) for sdcc z80
-        ;; implemented via ___fs2sint; returns low byte (truncate).
+        ;; implemented via ___fs2sint; returns low byte (two's complement truncation).
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2025 tomaz stih
@@ -13,10 +13,10 @@
         .globl  ___fs2sint
 
         ;; ___fs2schar
-        ;; inputs:  (stack) float a
-        ;; outputs: hl (L) = (signed char)a
+        ;; inputs:  float a in hl:de (same ABI chain as mk_f32 -> fs2sint)
+        ;; outputs: a = (signed char)a
         ;; clobbers: af, bc, de, hl
 ___fs2schar:
-        call    ___fs2sint
-        ; HL has int16; L is the schar (two's complement truncation)
+        call    ___fs2sint       ; de = int16 result
+        ld      a,e              ; return low byte in A
         ret
