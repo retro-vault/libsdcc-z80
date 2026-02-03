@@ -13,22 +13,16 @@
         .area   _CODE
 
         ;; ___sint2fs
-        ;; inputs:  (stack) int a
-        ;; outputs: de:hl = (float)a  (ieee-754 single)
+        ;; inputs:  hl = a (signed 16-bit)
+        ;; outputs: hl:de = (float)a  (ieee-754 single, hl=high word, de=low word)
         ;; clobbers: af, bc, de, hl
         .globl  ___sint2fs
         .globl  ___uint2fs
 ___sint2fs:
-        ; pop return and argument
-        pop     de              ; DE <- return address to caller
-        pop     hl              ; HL <- a (signed 16-bit)
-
-        ; zero shortcut
+        ;; zero shortcut
         ld      a,h
         or      l
         jr      nz, .nonzero
-        ; push back caller ret and return 0.0f
-        push    de
         xor     a
         ld      h,a
         ld      l,a
@@ -37,12 +31,13 @@ ___sint2fs:
         ret
 
 .nonzero:
-        ; record sign in B (0x80 if negative), make HL = unsigned magnitude
+        ;; sign flag in B (0x80 if negative)
         ld      b,#0x00
         bit     7,h
         jr      z, .mag_ok
         ld      b,#0x80
-        ; HL = -HL  (works for -32768 too -> 0x8000)
+
+        ;; HL = -HL  (two's complement; -32768 becomes 0x8000 which is fine)
         ld      a,l
         cpl
         ld      l,a
@@ -50,18 +45,13 @@ ___sint2fs:
         cpl
         ld      h,a
         inc     hl
+
 .mag_ok:
-        ; restore caller return on stack so our RET works
-        push    de
-
-        ; call ___uint2fs(HL); caller cleans stack -> we'll pop arg after return
-        push    hl              ; push unsigned magnitude as "unsigned int"
+        ;; convert magnitude
         call    ___uint2fs
-        pop     bc              ; discard our pushed argument (caller cleanup)
 
-        ; if negative, set sign bit in top byte (D |= 0x80)
+        ;; apply sign to float: set sign bit in highest byte (H bit7)
         bit     7,b
-        jr      z, .done
-        set     7,d
-.done:
+        ret     z
+        set     7,h
         ret

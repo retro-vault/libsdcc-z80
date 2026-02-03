@@ -11,18 +11,12 @@
         .area   _CODE
 
         ;; ___uint2fs
-        ;; inputs:  (stack) unsigned int a
-        ;; outputs: de:hl = (float)a  (ieee-754 single)
+        ;; inputs:  hl = a (unsigned 16-bit)
+        ;; outputs: hl:de = (float)a  (ieee-754 single, hl=high word, de=low word)
         ;; clobbers: af, bc, de, hl
         .globl  ___uint2fs
 ___uint2fs:
-        ; fetch return address and argument, then restore stack
-        pop     de              ; DE <- return address
-        pop     hl              ; HL <- a (unsigned 16-bit)
-        push    hl
-        push    de
-
-        ; zero?
+        ;; zero?
         ld      a,h
         or      l
         jr      nz, .nonzero
@@ -34,8 +28,7 @@ ___uint2fs:
         ret
 
 .nonzero:
-        ; sign = 0 (unsigned)
-        ; normalize HL until bit15=1; count shifts in C
+        ;; normalize HL until bit15 is 1; count shifts in C
         ld      c,#0x00
 .norm:
         bit     7,h
@@ -44,25 +37,30 @@ ___uint2fs:
         inc     c
         jr      .norm
 .normdone:
-        ; exponent = 127 + (15 - C) = 142 - C
+        ;; exponent = 127 + (15 - C) = 142 - C
         ld      a,#142
-        sub     c               ; A = exponent
+        sub     c               ;; A = exponent (8-bit)
 
-        ; pack ieee:
-        ; D = (sign<<7) | (exp>>1)   (sign=0 here)
-        rra                     ; A>>1, lsb -> carry
-        ld      d,a
+        ;; pack ieee:
+        ;; first output byte = exp >> 1   (sign=0)
+        ;; second output byte = ((exp&1)<<7) | (H & 0x7F)
+        srl     a               ;; A = exp>>1, carry = exp&1
+        ld      b,a             ;; B = first byte
 
-        ; E = ((exp&1)<<7) | (H & 0x7F)
         ld      a,h
         and     #0x7F
-        jr      nc, .e_nocarry
+        jr      nc, .no_exp_lsb
         or      #0x80
-.e_nocarry:
+.no_exp_lsb:
+        ld      c,a             ;; C = second byte
+
+        ;; mantissa low 16 bits = (L << 8)
+        ;; low word bytes: [L][0]
+        ld      d,l
+        xor     a
         ld      e,a
 
-        ; low 16 bits of mantissa = L << 8 (truncate low 8)
-        ld      h,l
-        xor     a
-        ld      l,a
+        ;; return float in HL:DE (high word in HL, low in DE)
+        ld      h,b
+        ld      l,c
         ret
