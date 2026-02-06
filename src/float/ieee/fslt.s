@@ -1,14 +1,13 @@
         ;; float less-than (ieee-754 single) for sdcc z80
-        ;; returns 1 if a<b else 0; implemented via ___fscmp.
+        ;; returns 1 if a<b else 0
+        ;; denormals treated as 0; NaN/Inf unsupported.
         ;;
         ;; ABI (observed):
         ;;   a in regs: HL:DE (H=a3, L=a2, D=a1, E=a0)
-        ;;   b is pushed by caller (see compiler output)
-        ;;   return boolean in A (caller tests A)
+        ;;   b on stack: ret, b.low, b.high   (caller pushes b.low then b.high)
+        ;;   result in A (0/1)
         ;;
-        ;; IMPORTANT:
-        ;;   do NOT clean b from the stack here; caller does "pop de"
-        ;;   and later restores SP from IX in the surrounding function.
+        ;; clobbers: af, bc, de, hl, ix
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2025 tomaz stih
@@ -22,20 +21,35 @@
         .globl  ___fscmp
 
 ___fslt:
+        ;; Stack on entry: ret_to_caller, b.low, b.high
+        ;; a is in HL:DE (must preserve this!)
+        
+        ;; We need to temporarily move ret_to_caller out of the way
+        ;; Save a copy of the return address deeper in the stack
+        
+        exx                     ;; switch to alternate registers
+        pop     hl              ;; HL' = return address
+        exx                     ;; back to main registers (a still in HL:DE)
+        
+        ;; Now stack is: b.low, b.high (correct for fscmp)
         call    ___fscmp
-
-        ;; ___fscmp returns int16 in DE:
-        ;;   -1 => 0xFFFF  (a<b)
-        ;;    0 => 0x0000
-        ;;   +1 => 0x0001
-        ;;
-        ;; return 1 in A iff DE == 0xFFFF
+        
+        ;; fscmp has cleaned stack and returned result in DE
+        exx
+        push    hl              ;; restore return address
+        exx
+        
+        ;; Check if DE == -1
         ld      a,d
-        and     e
-        inc     a               ;; 0xFF&0xFF=0xFF -> inc => 0x00 (Z=1) => true
-        jr      nz, .false
-        ld      a,#0x01
+        inc     a
+        jr      nz, ret_false
+        ld      a,e
+        inc     a
+        jr      nz, ret_false
+        
+        ld      a,#1
         ret
-.false:
+
+ret_false:
         xor     a
         ret

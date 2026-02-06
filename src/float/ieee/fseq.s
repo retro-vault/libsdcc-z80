@@ -1,10 +1,13 @@
-        ;; float equal (ieee-754 single) for sdcc z80
-        ;; returns 1 if a==b else 0; implemented via ___fscmp.
+;; float equal (ieee-754 single) for sdcc z80
+        ;; returns 1 if a==b else 0
+        ;; denormals treated as 0; NaN/Inf unsupported.
         ;;
-        ;; ABI:
-        ;;   a in regs HL:DE
-        ;;   b on stack
+        ;; ABI (observed):
+        ;;   a in regs: HL:DE
+        ;;   b on stack: ret, b.low, b.high
         ;;   result in A (0/1)
+        ;;
+        ;; clobbers: af, bc, de, hl, ix
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2025 tomaz stih
@@ -18,14 +21,30 @@
         .globl  ___fscmp
 
 ___fseq:
-        call    ___fscmp                ; DE = -1,0,+1
-
-        ;; A = 1 iff DE == 0
+        ;; Stack on entry: ret_to_caller, b.low, b.high
+        ;; a is in HL:DE (must preserve this!)
+        
+        exx                     ;; switch to alternate registers
+        pop     hl              ;; HL' = return address
+        exx                     ;; back to main registers (a still in HL:DE)
+        
+        ;; Now stack is: b.low, b.high (correct for fscmp)
+        call    ___fscmp
+        
+        ;; fscmp has cleaned stack and returned result in DE
+        exx
+        push    hl              ;; restore return address
+        exx
+        
+        ;; Check if DE == 0
         ld      a,d
         or      e
-        jr      nz, .false
-        ld      a,#0x01
+        jr      nz, ret_false
+        
+        ;; result was 0, so a == b
+        ld      a,#1
         ret
-.false:
-        xor     a
+
+ret_false:
+        xor     a               ;; A = 0
         ret
