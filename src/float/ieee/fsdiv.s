@@ -1,5 +1,18 @@
-;; float divide (ieee-754 single) for sdcc z80 - DEBUG V2
-        ;; debug focuses on the final packed result
+;; float divide (ieee-754 single) for sdcc z80
+        ;; result = a / b
+        ;; denormals treated as 0; division by zero returns max finite.
+        ;; 24-bit mantissa division producing 24 quotient bits.
+        ;;
+        ;; ABI (sdcccall(1)):
+        ;;   a in regs: HLDE  (H=a3, L=a2, D=a1, E=a0)
+        ;;   b on stack: 4 bytes pushed by caller (low word first)
+        ;;   result in HLDE
+        ;;   callee cleans b from stack
+        ;;
+        ;; clobbers: af, bc, de, hl, ix
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2025 tomaz stih
 
         .module fsdiv
         .optsdcc -mz80 sdcccall(1)
@@ -8,15 +21,32 @@
 
         .globl  ___fsdiv
 
-        .globl  _fdebug_store_a_b1
-        .globl  _fdebug_store_a_b2
-        .globl  _fdebug_store_a_b3
-        .globl  _fdebug_store_a_b4
-        .globl  _fdebug_store_hl_w1
-        .globl  _fdebug_store_hl_w2
-        .globl  _fdebug_store_de_w1
-        .globl  _fdebug_store_de_w2
-        .globl  _fdebug_store_bc_w1
+;; ============================================================
+;; Frame layout:
+;;
+;;   ix+7 : b3  (sign+exp high)
+;;   ix+6 : b2  (exp low + mant high)
+;;   ix+5 : b1
+;;   ix+4 : b0
+;;   ix+2,3: return address
+;;   ix+0,1: saved ix
+;;   ix-1 : H = a3        \  push hl
+;;   ix-2 : L = a2        /
+;;   ix-3 : D = a1        \  push de
+;;   ix-4 : E = a0        /
+;;   ix-5 : result sign
+;;   ix-6 : result exponent
+;;   ix-7  : mant_a[0] / rem[0]  (LSB)
+;;   ix-8  : mant_a[1] / rem[1]
+;;   ix-9  : mant_a[2] / rem[2]  (MSB, with implicit 1)
+;;   ix-10 : mant_b[0]  (LSB, divisor)
+;;   ix-11 : mant_b[1]
+;;   ix-12 : mant_b[2]  (MSB, with implicit 1)
+;;   ix-13 : quot[0]    (LSB)
+;;   ix-14 : quot[1]
+;;   ix-15 : quot[2]    (MSB)
+;;   ix-16 : integer bit (0 or 1)
+;; ============================================================
 
 ___fsdiv:
         push    ix
@@ -197,17 +227,6 @@ div_shift_q:
         rl      -15(ix)
         djnz    div_loop
 
-        ;; ---- DEBUG: raw quotient before normalize ----
-        ;; b1 = quot[2], b2 = quot[1], b3 = quot[0], b4 = int_bit
-        ld      a,-15(ix)
-        call    _fdebug_store_a_b1
-        ld      a,-14(ix)
-        call    _fdebug_store_a_b2
-        ld      a,-13(ix)
-        call    _fdebug_store_a_b3
-        ld      a,-16(ix)
-        call    _fdebug_store_a_b4
-
         ;; ---- normalize and pack ----
         ld      b,-5(ix)
         ld      c,-6(ix)
@@ -237,10 +256,6 @@ div_pack_noshift:
         srl     a
         or      b
         ld      h,a
-
-        ;; ---- DEBUG: final HLDE ----
-        call    _fdebug_store_hl_w1    ; w1 = HL (byte3:byte2)
-        call    _fdebug_store_de_w2    ; w2 = DE (byte1:byte0)
 
         jr      cleanup
 
