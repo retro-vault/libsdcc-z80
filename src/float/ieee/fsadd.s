@@ -1,23 +1,21 @@
-;;
-;; ieee-754 single add for sdcc z80 (sdcccall(1))
-;;
-;; ABI (confirmed from disasm):
-;;   a in regs:  dehl = a0,a1,a2,a3 (little endian bytes)
-;;              e=a0 d=a1 l=a2 h=a3
-;;   b on stack: push hl (b2,b3), push bc (b0,b1), call ___fsadd
-;;   caller does NOT clean b => callee MUST discard 4 bytes before returning.
-;;
-;; return:
-;;   dehl packed float (same byte order)
-;;
-;; behaviour:
-;;   - denormals (exp==0) flushed to 0
-;;   - no NaN/Inf handling
-;;   - truncation (no rounding)
-;;
-;; gpl-2.0-or-later (see: LICENSE)
-;; (c) 2025 tomaz stih
-;;
+        ;; ieee-754 single add for sdcc z80 (sdcccall(1))
+        ;;
+        ;; ABI (confirmed from disasm):
+        ;;   a in regs:  dehl = a0,a1,a2,a3 (little endian bytes)
+        ;;              e=a0 d=a1 l=a2 h=a3
+        ;;   b on stack: push hl (b2,b3), push bc (b0,b1), call ___fsadd
+        ;;   caller does NOT clean b => callee MUST discard 4 bytes before returning.
+        ;;
+        ;; return:
+        ;;   dehl packed float (same byte order)
+        ;;
+        ;; behaviour:
+        ;;   - denormals (exp==0) flushed to 0
+        ;;   - no NaN/Inf handling
+        ;;   - truncation (no rounding)
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; (c) 2025 tomaz stih
 
         .module fsadd
         .optsdcc -mz80 sdcccall(1)
@@ -25,14 +23,13 @@
         .area   _CODE
         .globl  ___fsadd
 
-;; locals (negative offsets from ix)
-;;  -12..-9 : a0..a3
-;;  -8..-5  : b0..b3
-;;  -4      : sx (sign of X)  0x00/0x80
-;;  -3      : sy (sign of Y)  0x00/0x80
-;;  -2      : ex (biased exp of X, 0..255)
-;;  -1      : diff
-
+        ;; locals (negative offsets from ix)
+        ;;  -12..-9 : a0..a3
+        ;;  -8..-5  : b0..b3
+        ;;  -4      : sx (sign of X)  0x00/0x80
+        ;;  -3      : sy (sign of Y)  0x00/0x80
+        ;;  -2      : ex (biased exp of X, 0..255)
+        ;;  -1      : diff
 ___fsadd::
         push    ix
         ld      ix,#0

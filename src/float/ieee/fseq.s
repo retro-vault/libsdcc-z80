@@ -1,4 +1,4 @@
-;; float equal (ieee-754 single) for sdcc z80
+        ;; float equal (ieee-754 single) for sdcc z80
         ;; returns 1 if a==b else 0
         ;; denormals treated as 0; NaN/Inf unsupported.
         ;;
