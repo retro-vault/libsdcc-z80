@@ -57,7 +57,7 @@ static uint32_t f32_bits(float x) {
     return mk_u32(t.u);   /* volatile barrier on the extracted bits */
 }
 
-#define _DEBUG 1
+#define _DEBUG 0
 
 #if(_DEBUG)
 /* ---------- debugging ---------- */ 
@@ -900,8 +900,6 @@ static int test_f32_div_zero_num(void) {
     fail(name); return 0;
 }
 
-
-/* ---------- edge cases ---------- */
 /* ---------- additional MUL tests ---------- */
 
 // Multiply two numbers where mantissa product has bit47=0 (no-shift path)
@@ -910,20 +908,18 @@ static int test_f32_mul_noshift(void) {
     const char *name = "fsmul 1.5 * 1.25 == 1.875";
     float a = mk_f32(mk_u32(0x3FC00000UL)); /* 1.5 */
     float b = mk_f32(mk_u32(0x3FA00000UL)); /* 1.25 */
-    float expected = mk_f32(mk_u32(0x3FF00000UL)); /* 1.875 */
     float got = __fsmul(a, b);
-    if (mk_u32(got) == mk_u32(expected)) { ok(name); return 1; }
+    if (f32_bits(got) == mk_u32(0x3FF00000UL)) { ok(name); return 1; }
     fail(name); return 0;
 }
 
 // Very small * very large = normal
 static int test_f32_mul_small_large(void) {
     const char *name = "fsmul 0.00390625 * 256.0 == 1.0";
-    float a = mk_f32(mk_u32(0x3B800000UL)); /* 0.00390625 = 2^-8 */
-    float b = mk_f32(mk_u32(0x43800000UL)); /* 256.0 = 2^8 */
-    float expected = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
+    float a = mk_f32(mk_u32(0x3B800000UL)); /* 2^-8 */
+    float b = mk_f32(mk_u32(0x43800000UL)); /* 2^8 */
     float got = __fsmul(a, b);
-    if (mk_u32(got) == mk_u32(expected)) { ok(name); return 1; }
+    if (f32_bits(got) == mk_u32(0x3F800000UL)) { ok(name); return 1; }
     fail(name); return 0;
 }
 
@@ -934,7 +930,7 @@ static int test_f32_mul_commutative(void) {
     float b = mk_f32(mk_u32(0x40400000UL)); /* 3.0 */
     float ab = __fsmul(a, b);
     float ba = __fsmul(b, a);
-    if (mk_u32(ab) == mk_u32(ba)) { ok(name); return 1; }
+    if (f32_bits(ab) == f32_bits(ba)) { ok(name); return 1; }
     fail(name); return 0;
 }
 
@@ -944,18 +940,17 @@ static int test_f32_mul_neg_by_zero(void) {
     float a = mk_f32(mk_u32(0xC0A00000UL)); /* -5.0 */
     float b = mk_f32(mk_u32(0x00000000UL)); /* 0.0 */
     float got = __fsmul(a, b);
-    if (mk_u32(got) == mk_u32(0x00000000UL)) { ok(name); return 1; }
+    if (f32_bits(got) == mk_u32(0x00000000UL)) { ok(name); return 1; }
     fail(name); return 0;
 }
 
-// Square of a number: 16.0 * 16.0 == 256.0
+// Square: 16.0 * 16.0 == 256.0
 static int test_f32_mul_square(void) {
     const char *name = "fsmul 16.0 * 16.0 == 256.0";
     float a = mk_f32(mk_u32(0x41800000UL)); /* 16.0 */
     float b = mk_f32(mk_u32(0x41800000UL)); /* 16.0 */
-    float expected = mk_f32(mk_u32(0x43800000UL)); /* 256.0 */
     float got = __fsmul(a, b);
-    if (mk_u32(got) == mk_u32(expected)) { ok(name); return 1; }
+    if (f32_bits(got) == mk_u32(0x43800000UL)) { ok(name); return 1; }
     fail(name); return 0;
 }
 
@@ -966,22 +961,21 @@ static int test_f32_div_neg_neg(void) {
     const char *name = "fsdiv -6.0 / -3.0 == 2.0";
     float a = mk_f32(mk_u32(0xC0C00000UL)); /* -6.0 */
     float b = mk_f32(mk_u32(0xC0400000UL)); /* -3.0 */
-    float expected = mk_f32(mk_u32(0x40000000UL)); /* 2.0 */
     float got = __fsdiv(a, b);
-    if (mk_u32(got) == mk_u32(expected)) { ok(name); return 1; }
+    if (f32_bits(got) == mk_u32(0x40000000UL)) { ok(name); return 1; }
     fail(name); return 0;
 }
 
 // Result < 1: 3.0 / 7.0 (non-terminating binary fraction)
-// 3/7 = 0.42857142857... IEEE754: 0x3EDBB6DC (truncated)
+// 3/7 truncated = 0x3EDB6DB6
 static int test_f32_div_frac_result(void) {
     const char *name = "fsdiv 3.0 / 7.0 == ~0.42857143";
     float a = mk_f32(mk_u32(0x40400000UL)); /* 3.0 */
     float b = mk_f32(mk_u32(0x40E00000UL)); /* 7.0 */
     float got = __fsdiv(a, b);
-    uint32_t gbits = mk_u32(got);
-    /* Accept 0x3EDBB6DB or 0x3EDBB6DC (truncation vs nearest) */
-    if (gbits == mk_u32(0x3EDBB6DBUL) || gbits == mk_u32(0x3EDBB6DCUL)) { ok(name); return 1; }
+    uint32_t gbits = f32_bits(got);
+    /* Accept 0x3EDB6DB6 (truncation) or 0x3EDB6DB7 (round nearest) */
+    if (gbits == mk_u32(0x3EDB6DB6UL) || gbits == mk_u32(0x3EDB6DB7UL)) { ok(name); return 1; }
     fail(name);
     cputs("  got: "); put_hex32(gbits); cputs("\n");
     return 0;
@@ -992,9 +986,8 @@ static int test_f32_div_by_half(void) {
     const char *name = "fsdiv 1.0 / 0.5 == 2.0";
     float a = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
     float b = mk_f32(mk_u32(0x3F000000UL)); /* 0.5 */
-    float expected = mk_f32(mk_u32(0x40000000UL)); /* 2.0 */
     float got = __fsdiv(a, b);
-    if (mk_u32(got) == mk_u32(expected)) { ok(name); return 1; }
+    if (f32_bits(got) == mk_u32(0x40000000UL)) { ok(name); return 1; }
     fail(name); return 0;
 }
 
@@ -1003,33 +996,41 @@ static int test_f32_div_large_small(void) {
     const char *name = "fsdiv 65536.0 / 0.0625 == 1048576.0";
     float a = mk_f32(mk_u32(0x47800000UL)); /* 65536.0 */
     float b = mk_f32(mk_u32(0x3D800000UL)); /* 0.0625 = 2^-4 */
-    float expected = mk_f32(mk_u32(0x49800000UL)); /* 1048576.0 = 2^20 */
     float got = __fsdiv(a, b);
-    if (mk_u32(got) == mk_u32(expected)) { ok(name); return 1; }
+    if (f32_bits(got) == mk_u32(0x49800000UL)) { ok(name); return 1; }
     fail(name); return 0;
 }
 
 // Consistency: (a * b) / b == a
 static int test_f32_muldiv_roundtrip(void) {
-    const char *name = "fsdiv (4.0 * 8.0) / 8.0 == 4.0";
+    const char *name = "fsdiv (4.0*8.0)/8.0 == 4.0";
     float a = mk_f32(mk_u32(0x40800000UL)); /* 4.0 */
     float b = mk_f32(mk_u32(0x41000000UL)); /* 8.0 */
-    float prod = __fsmul(a, b);              /* 32.0 */
-    float got = __fsdiv(prod, b);            /* 32.0 / 8.0 = 4.0 */
-    if (mk_u32(got) == mk_u32(0x40800000UL)) { ok(name); return 1; }
-    fail(name); return 0;
+    float prod = __fsmul(a, b);
+    float got = __fsdiv(prod, b);
+    if (f32_bits(got) == mk_u32(0x40800000UL)) { ok(name); return 1; }
+    fail(name);
+    cputs("  got: "); put_hex32(f32_bits(got)); cputs("\n");
+    return 0;
 }
 
 // Consistency: a / b * b == a (for exact values)
 static int test_f32_divmul_roundtrip(void) {
-    const char *name = "fsmul (32.0 / 8.0) * 8.0 == 32.0";
+    const char *name = "fsmul (32.0/8.0)*8.0 == 32.0";
     float a = mk_f32(mk_u32(0x42000000UL)); /* 32.0 */
     float b = mk_f32(mk_u32(0x41000000UL)); /* 8.0 */
-    float quot = __fsdiv(a, b);              /* 4.0 */
-    float got = __fsmul(quot, b);            /* 4.0 * 8.0 = 32.0 */
-    if (mk_u32(got) == mk_u32(0x42000000UL)) { ok(name); return 1; }
-    fail(name); return 0;
+    float quot = __fsdiv(a, b);
+    float got = __fsmul(quot, b);
+    if (f32_bits(got) == mk_u32(0x42000000UL)) { ok(name); return 1; }
+    fail(name);
+    cputs("  got: "); put_hex32(f32_bits(got)); cputs("\n");
+    return 0;
 }
+
+/* --- main additions ---
+
+*/
+
 
 /* ---------- main ---------- */
 
@@ -1140,9 +1141,17 @@ void main(void){
     total++; passed += test_f32_div_neg_neg();
     total++; passed += test_f32_div_by_half();
     total++; passed += test_f32_div_large_small();
+    total++; passed += test_f32_mul_noshift();
+    total++; passed += test_f32_mul_small_large();
+    total++; passed += test_f32_mul_commutative();
+    total++; passed += test_f32_mul_neg_by_zero();
+    total++; passed += test_f32_mul_square();
+    total++; passed += test_f32_div_neg_neg();
     total++; passed += test_f32_div_frac_result();
-    //total++; passed += test_f32_muldiv_roundtrip();
-    //total++; passed += test_f32_divmul_roundtrip();
+    total++; passed += test_f32_div_by_half();
+    total++; passed += test_f32_div_large_small();
+    total++; passed += test_f32_muldiv_roundtrip();
+    total++; passed += test_f32_divmul_roundtrip();
 
 #if(_DEBUG)
     dump_fdebug();
