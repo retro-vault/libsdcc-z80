@@ -1,47 +1,48 @@
-# We only allow compilation on linux!
-ifneq ($(shell uname), Linux)
-$(error OS must be Linux!)
+# Top-level Makefile: fix clean to work with overridden BUILD_DIR/BIN_DIR
+
+# Docker settings.
+DOCKER_IMAGE ?= wischner/sdcc-z80-zx-spectrum:latest
+WORKDIR      := $(PWD)
+
+# Output directories (relative to repo root by default).
+BUILD_DIR ?= build
+BIN_DIR   ?= bin
+
+# Paths as seen inside the container.
+ROOT_DOCKER := /work
+ifneq ($(filter /%,$(BUILD_DIR)),)
+BUILD_DIR_DOCKER := $(BUILD_DIR)
+else
+BUILD_DIR_DOCKER := $(ROOT_DOCKER)/$(BUILD_DIR)
 endif
 
-# Check if all required tools are on the system.
-REQUIRED = sdcc sdar sdasz80
-K := $(foreach exec,$(REQUIRED),\
-    $(if $(shell which $(exec)),,$(error "$(exec) not found. Please install or add to path.")))
+ifneq ($(filter /%,$(BIN_DIR)),)
+BIN_DIR_DOCKER := $(BIN_DIR)
+else
+BIN_DIR_DOCKER := $(ROOT_DOCKER)/$(BIN_DIR)
+endif
 
-# Global settings: folders.
-ROOT = $(realpath .)
-export BUILD_DIR	=	$(ROOT)/build
-export BIN_DIR		=	$(ROOT)/bin
+# Run container mounting the repo at /work; keep host ownership for outputs.
+DOCKER_RUN = docker run --rm \
+             -u $$(id -u):$$(id -g) \
+             -v "$(WORKDIR):/work" -w /work \
+             $(DOCKER_IMAGE)
 
-# Globa settings: tools.
-export CC			=	sdcc
-export CFLAGS		=	--std-c11 -mz80 -I. --no-std-crt0 --nostdinc --nostdlib --debug
-export AS			=	sdasz80
-export ASFLAGS		=	-xlos -g
-export AR			=	sdar
-export ARFLAGS		=	-rc
+.PHONY: all tests lib clean
 
-# Subfolders for make.
-SUBDIRS = src
+all: tests
 
-# Rules.
-.PHONY: all
-all:	$(BUILD_DIR) $(SUBDIRS)
-	cp $(BUILD_DIR)/*.lib $(BIN_DIR)
+tests: lib
+	$(DOCKER_RUN) sh -c '$(MAKE) -C test \
+		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" all'
 
-.PHONY: $(BUILD_DIR)
-$(BUILD_DIR):
-	# Create build dir.
-	mkdir -p $(BUILD_DIR)
-	# Remove bin dir (we are going to write again).
-	rm -f -r $(BIN_DIR)
-	# And re-create!
-	mkdir -p $(BIN_DIR)
+lib:
+	$(DOCKER_RUN) sh -c '$(MAKE) -C src \
+		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" all'
 
-.PHONY: $(SUBDIRS)
-$(SUBDIRS):
-	$(MAKE) -C $@
-	
-.PHONY: clean
 clean:
-	rm -f -r $(BUILD_DIR)
+	$(DOCKER_RUN) sh -c '$(MAKE) -C src \
+		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" clean'
+	$(DOCKER_RUN) sh -c '$(MAKE) -C test \
+		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" clean'
+	rm -rf $(BUILD_DIR) $(BIN_DIR)

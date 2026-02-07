@@ -1,0 +1,39 @@
+        ;; signed modulus helpers for 8-bit and 16-bit integers
+        ;; uses signed divide helpers and normalizes the remainder sign
+        ;;
+        ;; code from sdcc project
+        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2009-2021 philipp klaus krause
+		
+        .module modsigned                         ; module name
+        .optsdcc -mz80 sdcccall(1)
+
+        .area   _CODE                             ; code segment
+
+        .globl  __modschar                        ; export symbols
+        .globl  __modsint
+
+        ;; __modschar
+        ;; inputs:  a = dividend (signed 8-bit), l = divisor (signed 8-bit)
+        ;; outputs: l = dividend % divisor (signed 8-bit remainder)
+        ;; clobbers: a, d, e, h, l, f; plus any clobbers from __div8 /
+        ;;           __get_remainder
+        ;; notes: arrange params (l<-a, e<-orig l), call __div8, then
+        ;;        tail-jump to __get_remainder which adjusts remainder sign
+__modschar:
+        ld      e, l                              ; e = divisor (orig l)
+        ld      l, a                              ; l = dividend (from a)
+        call    __div8                            ; signed divide 8-bit
+        jp      __get_remainder                   ; finalize remainder in l
+
+        ;; __modsint
+        ;; inputs:  hl = dividend (signed 16-bit), de = divisor (signed 16-bit)
+        ;; outputs: hl = dividend % divisor (signed 16-bit remainder)
+        ;; clobbers: a, b, c, d, e, h, l, f; plus any clobbers from __div16 /
+        ;;           __get_remainder
+        ;; notes: __div16 produces quotient/remainder; __get_remainder
+        ;;        returns properly signed remainder in hl
+__modsint:
+        call    __div16                           ; signed divide 16-bit
+        jp      __get_remainder                   ; finalize remainder in hl

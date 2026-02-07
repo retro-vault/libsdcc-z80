@@ -1,21 +1,63 @@
-# Source files.
-C_SRCS	=	$(wildcard *.c)
-S_SRCS	=	$(wildcard *.s)
-OBJS	=	$(patsubst %.c,$(BUILD_DIR)/%.rel,$(C_SRCS)) $(patsubst %.s,$(BUILD_DIR)/%.rel,$(S_SRCS))
+# ------------------ configuration ------------------
 
-TARGET = libsdcc-z80
+TARGET := libsdcc-z80
 
-# Rules.
-.PHONY: all
-all:	$(BUILD_DIR)/$(TARGET).lib 
+# Allow injection from the command line:
+#   make BUILD_DIR=/abs/path BIN_DIR=/abs/path
+# Defaults are relative to this Makefile.
+BUILD_DIR ?= ../build
+BIN_DIR   ?= ../bin
 
-$(BUILD_DIR)/$(TARGET).lib: $(OBJS)
-	$(AR) $(ARFLAGS) $@ $^
+# Normalize to absolute paths after injection/defaulting.
+BUILD_DIR := $(abspath $(BUILD_DIR))
+BIN_DIR   := $(abspath $(BIN_DIR))
 
-$(BUILD_DIR)/%.rel:	%.s
-	$(AS) $(ASFLAGS) $(BUILD_DIR)/$(basename $*).rel $*.s
+# Force SDCC toolchain
+override CC := sdcc
+override AS := sdasz80
+override AR := sdar
 
+# Flags  (NOTE: no -l/-s to avoid polluting src/)
+CFLAGS  ?= --std-c11 -mz80 -I. --no-std-crt0 --nostdinc --nostdlib --debug
+ASFLAGS ?= -x -g
+ARFLAGS ?= -rcs
+
+# ------------------ sources & objects ------------------
+
+C_SRCS := $(shell find . -type f -name '*.c')
+S_SRCS := $(shell find . -type f -name '*.s')
+
+C_SRCS_N := $(patsubst ./%,%,$(C_SRCS))
+S_SRCS_N := $(patsubst ./%,%,$(S_SRCS))
+
+C_OBJS := $(addprefix $(BUILD_DIR)/,$(C_SRCS_N:.c=.rel))
+S_OBJS := $(addprefix $(BUILD_DIR)/,$(S_SRCS_N:.s=.rel))
+OBJS   := $(C_OBJS) $(S_OBJS)
+
+LIB := $(BIN_DIR)/$(TARGET).lib
+
+# ------------------ rules ------------------
+
+.PHONY: all clean
+
+all: $(LIB)
+
+$(LIB): $(OBJS) | $(BIN_DIR)
+	$(ENVPATH) $(AR) $(ARFLAGS) $@ $(OBJS)
+
+# C -> build/.../file.rel
 $(BUILD_DIR)/%.rel: %.c
-	$(CC) -c -o $@ $< $(CFLAGS)
+	mkdir -p $(@D)
+	$(ENVPATH) $(CC) $(CFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/%.rel: %.h
+# ASM -> build/.../file.rel  (explicit output path)
+$(BUILD_DIR)/%.rel: %.s
+	mkdir -p $(@D)
+	$(ENVPATH) $(AS) $(ASFLAGS) -o $@ $(abspath $<)
+
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+
+clean:
+	rm -rf $(BUILD_DIR)
+	rm -f $(LIB)

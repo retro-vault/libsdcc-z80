@@ -1,6 +1,7 @@
 # Directories.
 .vscode/
 lab/
+build/
 
 # SDCC
 *.lst
