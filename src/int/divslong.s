@@ -124,7 +124,72 @@ __divslong:
 .chk_abs_y_is_1:
         ld      a, -6(ix)
         cp      #1
+        jr      nz, .chk_pow2_byte_aligned
+        ld      a, -5(ix)
+        or      a
+        jr      nz, .chk_pow2_byte_aligned
+        ld      a, -4(ix)
+        or      a
+        jr      nz, .chk_pow2_byte_aligned
+        ld      a, -3(ix)
+        or      a
+        jr      nz, .chk_pow2_byte_aligned
+        jp      .post_div
+
+        ;; fast path: byte-aligned powers of two on abs(y)
+        ;; abs(y) == 0x00000100, 0x00010000, 0x01000000
+.chk_pow2_byte_aligned:
+        ld      a, -6(ix)
+        or      a
         jr      nz, .chk_x_lt_y
+
+        ;; abs(y) == 0x00000100 ?
+        ld      a, -5(ix)
+        cp      #1
+        jr      nz, .chk_pow2_16
+        ld      a, -4(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ld      a, -3(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ;; q = abs(x) >> 8 ; r = abs(x) & 0xFF
+        ld      -10(ix), l
+        xor     a
+        ld      -9(ix), a
+        ld      -8(ix), a
+        ld      -7(ix), a
+        ld      l, h
+        ld      h, e
+        ld      e, d
+        ld      d, a
+        jp      .post_div
+
+.chk_pow2_16:
+        ;; abs(y) == 0x00010000 ?
+        ld      a, -5(ix)
+        or      a
+        jr      nz, .chk_pow2_24
+        ld      a, -4(ix)
+        cp      #1
+        jr      nz, .chk_x_lt_y
+        ld      a, -3(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ;; q = abs(x) >> 16 ; r = abs(x) & 0xFFFF
+        ld      -10(ix), l
+        ld      -9(ix), h
+        xor     a
+        ld      -8(ix), a
+        ld      -7(ix), a
+        ld      l, e
+        ld      h, d
+        ld      e, a
+        ld      d, a
+        jp      .post_div
+
+.chk_pow2_24:
+        ;; abs(y) == 0x01000000 ?
         ld      a, -5(ix)
         or      a
         jr      nz, .chk_x_lt_y
@@ -132,8 +197,18 @@ __divslong:
         or      a
         jr      nz, .chk_x_lt_y
         ld      a, -3(ix)
-        or      a
+        cp      #1
         jr      nz, .chk_x_lt_y
+        ;; q = abs(x) >> 24 ; r = abs(x) & 0xFFFFFF
+        ld      -10(ix), l
+        ld      -9(ix), h
+        ld      -8(ix), e
+        xor     a
+        ld      -7(ix), a
+        ld      l, d
+        ld      h, a
+        ld      e, a
+        ld      d, a
         jp      .post_div
 
         ;; fast path: |x| < |y| => q=0, r=|x|

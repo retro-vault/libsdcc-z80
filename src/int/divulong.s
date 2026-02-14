@@ -73,7 +73,72 @@ __divulong:
 .chk_div1:
         ld      a, -12(ix)
         cp      #1
+        jr      nz, .chk_pow2_byte_aligned
+        ld      a, -11(ix)
+        or      a
+        jr      nz, .chk_pow2_byte_aligned
+        ld      a, -10(ix)
+        or      a
+        jr      nz, .chk_pow2_byte_aligned
+        ld      a, -9(ix)
+        or      a
+        jr      nz, .chk_pow2_byte_aligned
+        jp      .store_remainder
+
+        ;; fast path: byte-aligned powers of two
+        ;; y == 0x00000100, 0x00010000, 0x01000000
+.chk_pow2_byte_aligned:
+        ld      a, -12(ix)
+        or      a
         jr      nz, .chk_x_lt_y
+
+        ;; y == 0x00000100 ?
+        ld      a, -11(ix)
+        cp      #1
+        jr      nz, .chk_pow2_16
+        ld      a, -10(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ld      a, -9(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ;; q = x >> 8 ; r = x & 0xFF
+        ld      -8(ix), l
+        xor     a
+        ld      -7(ix), a
+        ld      -6(ix), a
+        ld      -5(ix), a
+        ld      l, h
+        ld      h, e
+        ld      e, d
+        ld      d, a
+        jp      .store_remainder
+
+.chk_pow2_16:
+        ;; y == 0x00010000 ?
+        ld      a, -11(ix)
+        or      a
+        jr      nz, .chk_pow2_24
+        ld      a, -10(ix)
+        cp      #1
+        jr      nz, .chk_x_lt_y
+        ld      a, -9(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ;; q = x >> 16 ; r = x & 0xFFFF
+        ld      -8(ix), l
+        ld      -7(ix), h
+        xor     a
+        ld      -6(ix), a
+        ld      -5(ix), a
+        ld      l, e
+        ld      h, d
+        ld      e, a
+        ld      d, a
+        jp      .store_remainder
+
+.chk_pow2_24:
+        ;; y == 0x01000000 ?
         ld      a, -11(ix)
         or      a
         jr      nz, .chk_x_lt_y
@@ -81,8 +146,18 @@ __divulong:
         or      a
         jr      nz, .chk_x_lt_y
         ld      a, -9(ix)
-        or      a
+        cp      #1
         jr      nz, .chk_x_lt_y
+        ;; q = x >> 24 ; r = x & 0xFFFFFF
+        ld      -8(ix), l
+        ld      -7(ix), h
+        ld      -6(ix), e
+        xor     a
+        ld      -5(ix), a
+        ld      l, d
+        ld      h, a
+        ld      e, a
+        ld      d, a
         jp      .store_remainder
 
         ;; fast path: x < y => q=0, r=x

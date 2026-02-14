@@ -24,6 +24,7 @@
         .globl  ___fsadd
         .globl  __fp_retpop4
         .globl  __fp_pack_norm
+        .globl  __fp_zero32
 
         ;; locals (negative offsets from ix)
         ;;  -12..-9 : a0..a3
@@ -153,11 +154,7 @@ ___fsadd::
         ld      a,-4(ix)
         xor     -3(ix)
         jr      z,.x_is_a
-        xor     a
-        ld      e,a
-        ld      d,a
-        ld      l,a
-        ld      h,a
+        call    __fp_zero32
         jp      .ret_cleanup
 
 .x_is_a:
@@ -252,11 +249,7 @@ ___fsadd::
         or      b
         or      l
         jr      nz,.sub_norm
-        xor     a
-        ld      e,a
-        ld      d,a
-        ld      l,a
-        ld      h,a
+        call    __fp_zero32
         jr      .ret_cleanup
 
 .sub_norm:
@@ -269,11 +262,7 @@ ___fsadd::
         rl      c
         dec     a
         jr      nz,.sub_loop
-        xor     a
-        ld      e,a
-        ld      d,a
-        ld      l,a
-        ld      h,a
+        call    __fp_zero32
         jr      .ret_cleanup
 
 .sub_pack:
