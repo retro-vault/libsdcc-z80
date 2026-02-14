@@ -27,6 +27,7 @@
         .globl  ___fsmul
         .globl  __fp_retpop4
         .globl  __fp_unpack_sign_exps
+        .globl  __fp_unpack_mant24_ab
         .globl  __fp_pack_norm
         .globl  __fp_zero32
 
@@ -100,25 +101,8 @@ exp_carry:
 exp_store:
         ld      -6(ix),a
 
-        ;; ---- build mantissa A (with implicit 1) ----
-        ld      a,-4(ix)
-        ld      -7(ix),a
-        ld      a,-3(ix)
-        ld      -8(ix),a
-        ld      a,-2(ix)
-        and     #0x7F
-        or      #0x80
-        ld      -9(ix),a
-
-        ;; ---- build mantissa B (with implicit 1) ----
-        ld      a,4(ix)
-        ld      -10(ix),a
-        ld      a,5(ix)
-        ld      -11(ix),a
-        ld      a,6(ix)
-        and     #0x7F
-        or      #0x80
-        ld      -12(ix),a
+        ;; ---- build mantissas A/B (with implicit 1) ----
+        call    __fp_unpack_mant24_ab
 
         ;; ---- zero 48-bit product ----
         xor     a
