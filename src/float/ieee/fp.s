@@ -1,6 +1,5 @@
-        ;; float helper utilities for sdcc z80
-        ;; dummy implementations of all float helpers so test_float.c will link.
-        ;; includes utility helpers (.zero32/.zero16) that can be reused later.
+        ;; float helper utilities for sdcc z80.
+        ;; these are small shared utility entry points only.
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2025 tomaz stih

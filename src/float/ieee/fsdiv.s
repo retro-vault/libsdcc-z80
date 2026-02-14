@@ -20,6 +20,7 @@
         .area   _CODE
 
         .globl  ___fsdiv
+        .globl  __fp_retpop4
 
 ;; ============================================================
 ;; Frame layout:
@@ -277,8 +278,4 @@ ret_maxfin:
 cleanup:
         ld      sp,ix
         pop     ix
-        pop     bc
-        pop     af
-        pop     af
-        push    bc
-        ret
+        jp      __fp_retpop4

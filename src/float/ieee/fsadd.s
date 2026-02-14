@@ -22,6 +22,7 @@
 
         .area   _CODE
         .globl  ___fsadd
+        .globl  __fp_retpop4
 
         ;; locals (negative offsets from ix)
         ;;  -12..-9 : a0..a3
@@ -71,40 +72,23 @@ ___fsadd::
         ;; ------------------------------------------------------------
 
         ;; ea -> B
-        ld      a,-10(ix)
-        and     #0x80
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        and     #0x01
-        ld      d,a
         ld      a,-9(ix)
         and     #0x7f
-        add     a,a
-        or      d
+        rlca
         ld      b,a
-
+        bit     7,-10(ix)
+        jr      z,.ea_ok
+        set     0,b
+.ea_ok:
         ;; eb -> C
-        ld      a,-6(ix)
-        and     #0x80
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        and     #0x01
-        ld      d,a
         ld      a,-5(ix)
         and     #0x7f
-        add     a,a
-        or      d
+        rlca
         ld      c,a
+        bit     7,-6(ix)
+        jr      z,.eb_ok
+        set     0,c
+.eb_ok:
 
         ;; flush denormals
         ld      a,b
@@ -332,8 +316,4 @@ ___fsadd::
 .ret_cleanup:
         ld      sp,ix
         pop     ix
-        pop     bc
-        pop     af
-        pop     af
-        push    bc
-        ret
+        jp      __fp_retpop4

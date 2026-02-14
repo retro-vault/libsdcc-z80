@@ -25,6 +25,7 @@
         .area   _CODE
 
         .globl  ___fsmul
+        .globl  __fp_retpop4
 
 ;; ============================================================
 ;; Frame layout:
@@ -330,11 +331,7 @@ ret_inf:
 cleanup:
         ld      sp,ix
         pop     ix
-        pop     bc
-        pop     af
-        pop     af
-        push    bc
-        ret
+        jp      __fp_retpop4
 
 
 ;; ============================================================
