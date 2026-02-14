@@ -1,4 +1,4 @@
-![status.badge] [![language.badge]][language.url] [![standard.badge]][standard.url] [![license.badge]][license.url]
+![status.badge] [![language.badge]][language.url] [![license.badge]][license.url]
 
 # libsdcc-z80
 
@@ -98,13 +98,10 @@ All builds run inside Docker.
 
 Use the GitHub Issues at the top of this page.
 
-[language.url]:   https://en.wikipedia.org/wiki/ANSI_C
-[language.badge]: https://img.shields.io/badge/language-C-blue.svg
-
-[standard.url]:   https://en.wikipedia.org/wiki/C11_(C_standard_revision)
-[standard.badge]: https://img.shields.io/badge/standard-C11-blue.svg
+[language.url]:   https://rosettacode.org/wiki/Category:Z80_Assembly
+[language.badge]: https://img.shields.io/badge/language-Z80%20Assembly-blue.svg
 
 [license.url]:    https://github.com/tstih/nice/blob/master/LICENSE
-[license.badge]:  https://img.shields.io/badge/license-MIT-blue.svg
+[license.badge]:  https://img.shields.io/badge/license-GPL2-blue.svg
 
 [status.badge]:  https://img.shields.io/badge/status-stable-dkgreen.svg
