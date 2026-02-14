@@ -23,28 +23,28 @@
 ___fseq:
         ;; Stack on entry: ret_to_caller, b.low, b.high
         ;; a is in HL:DE (must preserve this!)
-        
-        exx                     ;; switch to alternate registers
-        pop     hl              ;; HL' = return address
-        exx                     ;; back to main registers (a still in HL:DE)
-        
+
+        exx
+        pop     hl                              ; HL' = return address
+        exx
+
         ;; Now stack is: b.low, b.high (correct for fscmp)
         call    ___fscmp
-        
+
         ;; fscmp has cleaned stack and returned result in DE
         exx
-        push    hl              ;; restore return address
+        push    hl                              ; restore return address
         exx
-        
+
         ;; Check if DE == 0
         ld      a,d
         or      e
         jr      nz, ret_false
-        
+
         ;; result was 0, so a == b
         ld      a,#1
         ret
 
 ret_false:
-        xor     a               ;; A = 0
+        xor     a                               ; A = 0
         ret

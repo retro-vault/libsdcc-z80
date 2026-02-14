@@ -27,6 +27,8 @@
         .globl  ___fsmul
         .globl  __fp_retpop4
         .globl  __fp_unpack_sign_exps
+        .globl  __fp_pack_norm
+        .globl  __fp_zero32
 
 ;; ============================================================
 ;; Frame layout:
@@ -278,24 +280,12 @@ no_shift:
         ld      l,a
 
 pack:
-        ld      a,c
-        rrca
-        and     #0x80
-        or      l
-        ld      l,a
-
-        ld      a,c
-        srl     a
-        or      b
-        ld      h,a
+        call    __fp_pack_norm
 
         jr      cleanup
 
 ret_zero:
-        ld      h,#0
-        ld      l,#0
-        ld      d,#0
-        ld      e,#0
+        call    __fp_zero32
         jr      cleanup
 
 ret_inf:

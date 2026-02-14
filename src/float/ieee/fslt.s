@@ -23,22 +23,19 @@
 ___fslt:
         ;; Stack on entry: ret_to_caller, b.low, b.high
         ;; a is in HL:DE (must preserve this!)
-        
-        ;; We need to temporarily move ret_to_caller out of the way
-        ;; Save a copy of the return address deeper in the stack
-        
-        exx                     ;; switch to alternate registers
-        pop     hl              ;; HL' = return address
-        exx                     ;; back to main registers (a still in HL:DE)
-        
+
+        exx
+        pop     hl                              ; HL' = return address
+        exx
+
         ;; Now stack is: b.low, b.high (correct for fscmp)
         call    ___fscmp
-        
+
         ;; fscmp has cleaned stack and returned result in DE
         exx
-        push    hl              ;; restore return address
+        push    hl                              ; restore return address
         exx
-        
+
         ;; Check if DE == -1
         ld      a,d
         inc     a
@@ -46,7 +43,7 @@ ___fslt:
         ld      a,e
         inc     a
         jr      nz, ret_false
-        
+
         ld      a,#1
         ret
 

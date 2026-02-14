@@ -14,6 +14,7 @@
         .area   _CODE
         .globl  ___fs2ulong
         .globl  __fs2u32mag
+        .globl  __fp_zero32
 
 ___fs2ulong:
         ;; arrange: HL = low word, DE = high word
@@ -22,11 +23,7 @@ ___fs2ulong:
         ;; negative -> 0
         bit     7,d
         jr      z, .nonneg
-        xor     a
-        ld      d,a
-        ld      e,a
-        ld      h,a
-        ld      l,a
+        call    __fp_zero32
         jr      .ret32
 
 .nonneg:
@@ -46,11 +43,7 @@ ___fs2ulong:
 
         ;; if e < 0 -> 0
         jr      nc, .e_nonneg
-        xor     a
-        ld      d,a
-        ld      e,a
-        ld      h,a
-        ld      l,a
+        call    __fp_zero32
         jr      .ret32
 
 .e_nonneg:

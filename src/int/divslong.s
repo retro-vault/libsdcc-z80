@@ -112,6 +112,63 @@ __divslong:
         ld      -8(ix),  a
         ld      -7(ix),  a
 
+        ;; fast path: |x| == 0 => q=0, r=0
+        ld      a, d
+        or      e
+        or      h
+        or      l
+        jr      nz, .chk_abs_y_is_1
+        jp      .post_div
+
+        ;; fast path: |y| == 1 => q=|x|, r=0
+.chk_abs_y_is_1:
+        ld      a, -6(ix)
+        cp      #1
+        jr      nz, .chk_x_lt_y
+        ld      a, -5(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ld      a, -4(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ld      a, -3(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        jp      .post_div
+
+        ;; fast path: |x| < |y| => q=0, r=|x|
+.chk_x_lt_y:
+        ld      a, d
+        cp      -3(ix)
+        jr      c, .x_lt_y
+        jr      nz, .run_div
+        ld      a, e
+        cp      -4(ix)
+        jr      c, .x_lt_y
+        jr      nz, .run_div
+        ld      a, h
+        cp      -5(ix)
+        jr      c, .x_lt_y
+        jr      nz, .run_div
+        ld      a, l
+        cp      -6(ix)
+        jr      c, .x_lt_y
+        jr      .run_div
+
+.x_lt_y:
+        ld      -10(ix), l
+        ld      -9(ix), h
+        ld      -8(ix), e
+        ld      -7(ix), d
+        xor     a
+        ld      d, a
+        ld      e, a
+        ld      h, a
+        ld      l, a
+        jr      .post_div
+
+        ;; unsigned restoring division: quotient in de:hl, remainder in locals
+.run_div:
         ;; unsigned restoring division: quotient in de:hl, remainder in locals
         ld      b, #32
 
@@ -165,6 +222,7 @@ __divslong:
 .next_bit:
         djnz    .u32_div_loop
 
+.post_div:
         ;; normalize remainder sign to original dividend sign and store
         ;; for __modslong helper path.
         ld      a, -2(ix)

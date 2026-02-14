@@ -61,6 +61,63 @@ __divulong:
         ld      a, 7(ix)
         ld      -9(ix), a
 
+        ;; fast path: x == 0 => q=0, r=0
+        ld      a, d
+        or      e
+        or      h
+        or      l
+        jr      nz, .chk_div1
+        jp      .store_remainder
+
+        ;; fast path: y == 1 => q=x, r=0
+.chk_div1:
+        ld      a, -12(ix)
+        cp      #1
+        jr      nz, .chk_x_lt_y
+        ld      a, -11(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ld      a, -10(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        ld      a, -9(ix)
+        or      a
+        jr      nz, .chk_x_lt_y
+        jp      .store_remainder
+
+        ;; fast path: x < y => q=0, r=x
+.chk_x_lt_y:
+        ld      a, d
+        cp      -9(ix)
+        jr      c, .x_lt_y
+        jr      nz, .run_div
+        ld      a, e
+        cp      -10(ix)
+        jr      c, .x_lt_y
+        jr      nz, .run_div
+        ld      a, h
+        cp      -11(ix)
+        jr      c, .x_lt_y
+        jr      nz, .run_div
+        ld      a, l
+        cp      -12(ix)
+        jr      c, .x_lt_y
+        jr      .run_div
+
+.x_lt_y:
+        ld      -8(ix), l
+        ld      -7(ix), h
+        ld      -6(ix), e
+        ld      -5(ix), d
+        xor     a
+        ld      d, a
+        ld      e, a
+        ld      h, a
+        ld      l, a
+        jr      .store_remainder
+
+        ;; 32 iterations, restoring division
+.run_div:
         ;; 32 iterations, restoring division
         ld      b, #32
 
@@ -114,6 +171,7 @@ __divulong:
 .next_bit:
         djnz    .u32_div_loop
 
+.store_remainder:
         ;; store remainder to static cell
         ld      a, -8(ix)
         ld      (__last_remainder_ulong+0), a

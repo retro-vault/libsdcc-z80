@@ -23,6 +23,7 @@
         .area   _CODE
         .globl  ___fsadd
         .globl  __fp_retpop4
+        .globl  __fp_pack_norm
 
         ;; locals (negative offsets from ix)
         ;;  -12..-9 : a0..a3
@@ -308,10 +309,9 @@ ___fsadd::
         jr      z,.p2_ok
         set     7,l
 .p2_ok:
-        ld      a,-2(ix)
-        srl     a
-        or      -4(ix)
-        ld      h,a
+        ld      b,-4(ix)
+        ld      c,-2(ix)
+        call    __fp_pack_norm
 
 .ret_cleanup:
         ld      sp,ix
