@@ -25,7 +25,7 @@ the compiler, and all symbols are resolved by the linker.
 
 - 100% Z80 assembly (zero C in the runtime)
 - Optimized for speed
-- Supports `int`, `long`, `long long`, `float`
+- Supports `int`, `long`, `float`
 - Full coverage of arithmetic, comparisons, shifts, and type conversions
 - Docker-based build (no local toolchain required)
 - Comprehensive ZX Spectrum automated tests
