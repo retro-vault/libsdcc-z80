@@ -1,6 +1,7 @@
-This library is extracted from the SDCC project and redistributed
-under the GNU General Public License v2 (or later), with the SDCC
-linking exception (see LICENSE).
+This library is based on code from the SDCC project, but it
+has been substantially rewritten. It is redistributed under 
+the same GNU General Public License v2 (or later), with the 
+SDCC linking exception (see LICENSE).
 
 As a special exception, if you link this library with other files,
 some of which are compiled with SDCC, to produce an executable,
@@ -10,7 +11,7 @@ not however invalidate any other reasons why the executable file
 might be covered by the GNU General Public License.
 
 Copyright holders:
-
+- Tomaz Stih, 2025-2026
 - Philipp Klaus Krause, 2008–2021
 - Michael Hope, 2000–2021
 - Marco Bodrato, 2008–2021
