@@ -1,4 +1,3 @@
-        ;;
         ;; unsigned 32-bit division (long)
         ;;
         ;; ABI (sdcccall(1), matches your build):
@@ -7,21 +6,23 @@
         ;; returns:
         ;;   quotient in DE = low16, HL = high16
         ;;
-        ;; remainder is saved to a static cell for optional retrieval.
-        ;;
-
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2026 tomaz stih
         .module divulong
         .optsdcc -mz80 sdcccall(1)
 
         .area   _CODE
 
         .globl  __divulong
-        .globl  __get_remainder_ulong
 
         ;; locals (relative to ix):
         ;;   -8..-5  : remainder (low..high)
         ;;   -12..-9 : divisor y (low..high)
 
+        ;; __divulong
+        ;; inputs:  x in DE:HL (DE=low16, HL=high16), y at 4(ix)..7(ix) (lsb..msb)
+        ;; outputs: DE:HL = unsigned quotient x / y
+        ;; clobbers: af, bc, de, hl, ix
 __divulong:
         push    ix
         ld      ix, #0
@@ -61,6 +62,8 @@ __divulong:
         ld      a, 7(ix)
         ld      -9(ix), a
 
+        ;; 32 iterations, restoring division
+.run_div:
         ;; 32 iterations, restoring division
         ld      b, #32
 
@@ -114,16 +117,7 @@ __divulong:
 .next_bit:
         djnz    .u32_div_loop
 
-        ;; store remainder to static cell
-        ld      a, -8(ix)
-        ld      (__last_remainder_ulong+0), a
-        ld      a, -7(ix)
-        ld      (__last_remainder_ulong+1), a
-        ld      a, -6(ix)
-        ld      (__last_remainder_ulong+2), a
-        ld      a, -5(ix)
-        ld      (__last_remainder_ulong+3), a
-
+.finish:
         ;; quotient currently internal (DE high, HL low) -> ABI wants (DE low, HL high)
         ex      de, hl
 
@@ -131,22 +125,3 @@ __divulong:
         ld      sp, ix
         pop     ix
         ret
-
-
-__get_remainder_ulong:
-        ;; returns last remainder from static cell as DE low, HL high
-        ld      hl, #__last_remainder_ulong
-        ld      e, (hl)
-        inc     hl
-        ld      d, (hl)
-        inc     hl
-        ld      a, (hl)
-        inc     hl
-        ld      h, (hl)
-        ld      l, a
-        ret
-
-
-        .area   _DATA
-__last_remainder_ulong:
-        .ds     4

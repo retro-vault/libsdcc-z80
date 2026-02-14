@@ -1,4 +1,3 @@
-        ;;
         ;; signed 32-bit multiply (low 32 bits)
         ;;
         ;; ABI (confirmed from caller):
@@ -11,6 +10,8 @@
         ;; (bytes l,h,e,d are lsb..msb), so we swap at entry and swap
         ;; back at return.
         ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2026 tomaz stih
 
         .module mullong
         .optsdcc -mz80 sdcccall(1)
@@ -23,6 +24,10 @@
         ;;  -8..-5  : accumulator (low 32)
         ;;  -13     : sign flag
 
+        ;; __mullong
+        ;; inputs:  a in DE:HL, b at 4(ix)..7(ix) (lsb..msb)
+        ;; outputs: DE:HL = low 32 bits of signed product
+        ;; clobbers: af, bc, de, hl, ix
 __mullong:
         push    ix
         ld      ix, #0

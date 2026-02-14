@@ -1,5 +1,4 @@
-        ;;
-        ;; unsigned 32-bit modulus (long), reentrant/thread-safe
+        ;; unsigned 32-bit modulus (long), reentrant
         ;;
         ;; ABI (sdcccall(1), matches your build):
         ;;   x (dividend) in regs:  DE = low16, HL = high16
@@ -7,10 +6,8 @@
         ;; returns:
         ;;   remainder in regs:     DE = low16, HL = high16
         ;;
-        ;; algorithm: restoring division; quotient bits are formed in the
-        ;; shifted dividend register but are ignored; remainder is kept
-        ;; in frame locals and returned.
-        ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2026 tomaz stih
 
         .module modulong
         .optsdcc -mz80 sdcccall(1)
@@ -22,7 +19,10 @@
         ;; locals (relative to ix):
         ;;   -8..-5  : remainder (low..high)
         ;;   -12..-9 : divisor y (low..high)
-
+        ;; __modulong
+        ;; inputs:  x in DE:HL (DE=low16, HL=high16), y at 4(ix)..7(ix) (lsb..msb)
+        ;; outputs: DE:HL = x % y (DE=low16, HL=high16)
+        ;; clobbers: af, bc, de, hl, ix
 __modulong:
         push    ix
         ld      ix, #0
@@ -41,7 +41,7 @@ __modulong:
         ld      h, b
         ld      l, c
 
-        ;; normalize x into internal order DE:HL = high:low
+        ;; normalize dividend into internal order DE:HL = high:low
         ;; incoming: DE low, HL high -> internal: DE high, HL low
         ex      de, hl
 
@@ -62,11 +62,11 @@ __modulong:
         ld      a, 7(ix)
         ld      -9(ix), a
 
-        ;; 32 iterations
+        ;; 32 iterations, restoring division (remainder only)
         ld      b, #32
 
 .u32_mod_loop:
-        ;; shift dividend (quotient accumulator) left by 1
+        ;; shift dividend register left by 1 to feed next bit
         add     hl, hl
         rl      e
         rl      d
@@ -78,7 +78,7 @@ __modulong:
         rl      -5(ix)
 
         ;; try remainder -= divisor
-        or      a                                  ; clear carry
+        or      a
         ld      a, -8(ix)
         sbc     a, -12(ix)
         ld      -8(ix), a
@@ -91,10 +91,10 @@ __modulong:
         ld      a, -5(ix)
         sbc     a, -9(ix)
         ld      -5(ix), a
-        jr      nc, .keep_sub
+        jr      nc, .next_bit
 
-        ;; borrow -> restore remainder (add divisor back)
-        or      a                                  ; CLEAR carry before adc!
+        ;; borrow -> restore remainder
+        or      a
         ld      a, -8(ix)
         adc     a, -12(ix)
         ld      -8(ix), a
@@ -107,24 +107,16 @@ __modulong:
         ld      a, -5(ix)
         adc     a, -9(ix)
         ld      -5(ix), a
-        jr      .next_bit
-
-.keep_sub:
-        set     0, l                               ; quotient bit (ignored)
 
 .next_bit:
         djnz    .u32_mod_loop
 
-        ;; return remainder:
-        ;; locals are low..high bytes:
-        ;;   -8 = byte0, -7 = byte1, -6 = byte2, -5 = byte3
-        ;; ABI wants DE=low16, HL=high16
+        ;; return remainder in ABI order DE low, HL high
         ld      e, -8(ix)
         ld      d, -7(ix)
         ld      l, -6(ix)
         ld      h, -5(ix)
 
-        ;; tear down frame
         ld      sp, ix
         pop     ix
         ret

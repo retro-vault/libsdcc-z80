@@ -1,5 +1,4 @@
-        ;;
-        ;; signed 32-bit division (long), reentrant
+        ;; signed 32-bit division (long)
         ;;
         ;; ABI (sdcccall(1), matches your build):
         ;;   x (dividend) in regs:  DE = low16, HL = high16
@@ -10,6 +9,8 @@
         ;; semantics:
         ;;   q = trunc(x / y) toward zero
         ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2026 tomaz stih
 
         .module divlong
         .optsdcc -mz80 sdcccall(1)
@@ -24,6 +25,10 @@
         ;;   -6..-3  : abs(y) (low..high)
         ;;   -10..-7 : remainder (low..high)
 
+        ;; __divslong
+        ;; inputs:  x in DE:HL (signed), y at 4(ix)..7(ix) (signed, lsb..msb)
+        ;; outputs: DE:HL = trunc(x / y) (signed quotient)
+        ;; clobbers: af, bc, de, hl, ix
 __divslong:
         push    ix
         ld      ix, #0
@@ -55,18 +60,7 @@ __divslong:
         bit     7, d
         jr      z, .x_abs_done
         ld      -2(ix), #1
-        xor     a
-        sub     a, l
-        ld      l, a
-        ld      a, #0
-        sbc     a, h
-        ld      h, a
-        ld      a, #0
-        sbc     a, e
-        ld      e, a
-        ld      a, #0
-        sbc     a, d
-        ld      d, a
+        call    .neg_dehl
 .x_abs_done:
 
         ;; copy y from stack 4..7 into abs(y) locals -6..-3 (low..high)
@@ -111,6 +105,8 @@ __divslong:
         ld      -8(ix),  a
         ld      -7(ix),  a
 
+        ;; unsigned restoring division: quotient in de:hl, remainder in locals
+.run_div:
         ;; unsigned restoring division: quotient in de:hl, remainder in locals
         ld      b, #32
 
@@ -164,11 +160,24 @@ __divslong:
 .next_bit:
         djnz    .u32_div_loop
 
+.post_div:
         ;; apply quotient sign if needed (sign_q in -1(ix))
         ld      a, -1(ix)
         or      a
         jr      z, .ret_order
 
+        call    .neg_dehl
+
+.ret_order:
+        ;; quotient currently internal (DE high, HL low) -> ABI wants (DE low, HL high)
+        ex      de, hl
+
+        ;; tear down frame
+        ld      sp, ix
+        pop     ix
+        ret
+
+.neg_dehl:
         xor     a
         sub     a, l
         ld      l, a
@@ -181,12 +190,4 @@ __divslong:
         ld      a, #0
         sbc     a, d
         ld      d, a
-
-.ret_order:
-        ;; quotient currently internal (DE high, HL low) -> ABI wants (DE low, HL high)
-        ex      de, hl
-
-        ;; tear down frame
-        ld      sp, ix
-        pop     ix
         ret

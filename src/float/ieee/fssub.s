@@ -1,4 +1,3 @@
-        ;;
         ;; float sub (ieee-754 single) for sdcc z80 (sdcccall(1))
         ;;
         ;; computes a - b by flipping b's sign bit and tail-calling ___fsadd.
@@ -20,6 +19,10 @@
         .globl  ___fssub
         .globl  ___fsadd
 
+        ;; ___fssub
+        ;; inputs:  a in DEHL, b on caller stack (4 bytes)
+        ;; outputs: DEHL = IEEE-754 single result a - b
+        ;; clobbers: af, bc, de, hl, ix
 ___fssub::
         push    hl              ; preserve a2/a3 (HL)
 

@@ -22,6 +22,9 @@
 
         .area   _CODE
         .globl  ___fsadd
+        .globl  __fp_retpop4
+        .globl  __fp_pack_norm
+        .globl  __fp_zero32
 
         ;; locals (negative offsets from ix)
         ;;  -12..-9 : a0..a3
@@ -30,6 +33,10 @@
         ;;  -3      : sy (sign of Y)  0x00/0x80
         ;;  -2      : ex (biased exp of X, 0..255)
         ;;  -1      : diff
+        ;; ___fsadd
+        ;; inputs:  a in DEHL, b on caller stack (4 bytes)
+        ;; outputs: DEHL = IEEE-754 single sum
+        ;; clobbers: af, bc, de, hl, ix
 ___fsadd::
         push    ix
         ld      ix,#0
@@ -71,40 +78,23 @@ ___fsadd::
         ;; ------------------------------------------------------------
 
         ;; ea -> B
-        ld      a,-10(ix)
-        and     #0x80
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        and     #0x01
-        ld      d,a
         ld      a,-9(ix)
         and     #0x7f
-        add     a,a
-        or      d
+        rlca
         ld      b,a
-
+        bit     7,-10(ix)
+        jr      z,.ea_ok
+        set     0,b
+.ea_ok:
         ;; eb -> C
-        ld      a,-6(ix)
-        and     #0x80
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        and     #0x01
-        ld      d,a
         ld      a,-5(ix)
         and     #0x7f
-        add     a,a
-        or      d
+        rlca
         ld      c,a
+        bit     7,-6(ix)
+        jr      z,.eb_ok
+        set     0,c
+.eb_ok:
 
         ;; flush denormals
         ld      a,b
@@ -168,11 +158,7 @@ ___fsadd::
         ld      a,-4(ix)
         xor     -3(ix)
         jr      z,.x_is_a
-        xor     a
-        ld      e,a
-        ld      d,a
-        ld      l,a
-        ld      h,a
+        call    __fp_zero32
         jp      .ret_cleanup
 
 .x_is_a:
@@ -267,11 +253,7 @@ ___fsadd::
         or      b
         or      l
         jr      nz,.sub_norm
-        xor     a
-        ld      e,a
-        ld      d,a
-        ld      l,a
-        ld      h,a
+        call    __fp_zero32
         jr      .ret_cleanup
 
 .sub_norm:
@@ -284,11 +266,7 @@ ___fsadd::
         rl      c
         dec     a
         jr      nz,.sub_loop
-        xor     a
-        ld      e,a
-        ld      d,a
-        ld      l,a
-        ld      h,a
+        call    __fp_zero32
         jr      .ret_cleanup
 
 .sub_pack:
@@ -324,16 +302,11 @@ ___fsadd::
         jr      z,.p2_ok
         set     7,l
 .p2_ok:
-        ld      a,-2(ix)
-        srl     a
-        or      -4(ix)
-        ld      h,a
+        ld      b,-4(ix)
+        ld      c,-2(ix)
+        call    __fp_pack_norm
 
 .ret_cleanup:
         ld      sp,ix
         pop     ix
-        pop     bc
-        pop     af
-        pop     af
-        push    bc
-        ret
+        jp      __fp_retpop4

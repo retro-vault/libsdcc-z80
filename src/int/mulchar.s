@@ -1,7 +1,7 @@
         ;; multiplication shims for signed/unsigned 8×8→16 bit
         ;; prepares operands in bc and de, then tail-calls __mul16
         ;;
-        ;; code from sdcc project
+        ;; loosely based on code from sdcc project
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2017-2021 philipp klaus krause

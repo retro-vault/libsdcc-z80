@@ -15,6 +15,7 @@
         .area   _CODE                             ; code segment
 
         .globl  ___fscmp                          ; export symbols
+        .globl  __fp_retpop4
 
         ;; ___fscmp
         ;; inputs:  hl:de = a (float), stack = b (float)
@@ -183,10 +184,4 @@ ___fscmp::
 
 .ret:
         pop     ix
-
-        ;; stack at this point: retaddr, b.low, b.high
-        pop     hl                                ; return address
-        pop     bc                                ; discard b.low
-        pop     bc                                ; discard b.high
-        push    hl
-        ret
+        jp      __fp_retpop4
