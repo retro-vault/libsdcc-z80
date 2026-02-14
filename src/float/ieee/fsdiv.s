@@ -21,6 +21,7 @@
 
         .globl  ___fsdiv
         .globl  __fp_retpop4
+        .globl  __fp_unpack_sign_exps
 
 ;; ============================================================
 ;; Frame layout:
@@ -61,29 +62,8 @@ ___fsdiv:
         add     hl,sp
         ld      sp,hl
 
-        ;; ---- extract result sign ----
-        ld      a,-1(ix)
-        xor     7(ix)
-        and     #0x80
-        ld      -5(ix),a
-
-        ;; ---- extract exponents ----
-        ld      a,-1(ix)
-        and     #0x7F
-        rlca
-        ld      c,a
-        bit     7,-2(ix)
-        jr      z,ea_done
-        set     0,c
-ea_done:
-        ld      a,7(ix)
-        and     #0x7F
-        rlca
-        ld      b,a
-        bit     7,6(ix)
-        jr      z,eb_done
-        set     0,b
-eb_done:
+        ;; ---- extract result sign and exponents ----
+        call    __fp_unpack_sign_exps
 
         ;; ---- check zero/denormal ----
         ld      a,c
