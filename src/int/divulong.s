@@ -1,4 +1,3 @@
-        ;;
         ;; unsigned 32-bit division (long)
         ;;
         ;; ABI (sdcccall(1), matches your build):
@@ -7,21 +6,23 @@
         ;; returns:
         ;;   quotient in DE = low16, HL = high16
         ;;
-        ;; remainder is saved to a static cell for optional retrieval.
-        ;;
-
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2026 tomaz stih
         .module divulong
         .optsdcc -mz80 sdcccall(1)
 
         .area   _CODE
 
         .globl  __divulong
-        .globl  __get_remainder_ulong
 
         ;; locals (relative to ix):
         ;;   -8..-5  : remainder (low..high)
         ;;   -12..-9 : divisor y (low..high)
 
+        ;; __divulong
+        ;; inputs:  x in DE:HL (DE=low16, HL=high16), y at 4(ix)..7(ix) (lsb..msb)
+        ;; outputs: DE:HL = unsigned quotient x / y
+        ;; clobbers: af, bc, de, hl, ix
 __divulong:
         push    ix
         ld      ix, #0
@@ -60,136 +61,6 @@ __divulong:
         ld      -10(ix), a
         ld      a, 7(ix)
         ld      -9(ix), a
-
-        ;; fast path: x == 0 => q=0, r=0
-        ld      a, d
-        or      e
-        or      h
-        or      l
-        jr      nz, .chk_div1
-        jp      .store_remainder
-
-        ;; fast path: y == 1 => q=x, r=0
-.chk_div1:
-        ld      a, -12(ix)
-        cp      #1
-        jr      nz, .chk_pow2_byte_aligned
-        ld      a, -11(ix)
-        or      a
-        jr      nz, .chk_pow2_byte_aligned
-        ld      a, -10(ix)
-        or      a
-        jr      nz, .chk_pow2_byte_aligned
-        ld      a, -9(ix)
-        or      a
-        jr      nz, .chk_pow2_byte_aligned
-        jp      .store_remainder
-
-        ;; fast path: byte-aligned powers of two
-        ;; y == 0x00000100, 0x00010000, 0x01000000
-.chk_pow2_byte_aligned:
-        ld      a, -12(ix)
-        or      a
-        jr      nz, .chk_x_lt_y
-
-        ;; y == 0x00000100 ?
-        ld      a, -11(ix)
-        cp      #1
-        jr      nz, .chk_pow2_16
-        ld      a, -10(ix)
-        or      a
-        jr      nz, .chk_x_lt_y
-        ld      a, -9(ix)
-        or      a
-        jr      nz, .chk_x_lt_y
-        ;; q = x >> 8 ; r = x & 0xFF
-        ld      -8(ix), l
-        xor     a
-        ld      -7(ix), a
-        ld      -6(ix), a
-        ld      -5(ix), a
-        ld      l, h
-        ld      h, e
-        ld      e, d
-        ld      d, a
-        jp      .store_remainder
-
-.chk_pow2_16:
-        ;; y == 0x00010000 ?
-        ld      a, -11(ix)
-        or      a
-        jr      nz, .chk_pow2_24
-        ld      a, -10(ix)
-        cp      #1
-        jr      nz, .chk_x_lt_y
-        ld      a, -9(ix)
-        or      a
-        jr      nz, .chk_x_lt_y
-        ;; q = x >> 16 ; r = x & 0xFFFF
-        ld      -8(ix), l
-        ld      -7(ix), h
-        xor     a
-        ld      -6(ix), a
-        ld      -5(ix), a
-        ld      l, e
-        ld      h, d
-        ld      e, a
-        ld      d, a
-        jp      .store_remainder
-
-.chk_pow2_24:
-        ;; y == 0x01000000 ?
-        ld      a, -11(ix)
-        or      a
-        jr      nz, .chk_x_lt_y
-        ld      a, -10(ix)
-        or      a
-        jr      nz, .chk_x_lt_y
-        ld      a, -9(ix)
-        cp      #1
-        jr      nz, .chk_x_lt_y
-        ;; q = x >> 24 ; r = x & 0xFFFFFF
-        ld      -8(ix), l
-        ld      -7(ix), h
-        ld      -6(ix), e
-        xor     a
-        ld      -5(ix), a
-        ld      l, d
-        ld      h, a
-        ld      e, a
-        ld      d, a
-        jp      .store_remainder
-
-        ;; fast path: x < y => q=0, r=x
-.chk_x_lt_y:
-        ld      a, d
-        cp      -9(ix)
-        jr      c, .x_lt_y
-        jr      nz, .run_div
-        ld      a, e
-        cp      -10(ix)
-        jr      c, .x_lt_y
-        jr      nz, .run_div
-        ld      a, h
-        cp      -11(ix)
-        jr      c, .x_lt_y
-        jr      nz, .run_div
-        ld      a, l
-        cp      -12(ix)
-        jr      c, .x_lt_y
-        jr      .run_div
-
-.x_lt_y:
-        ld      -8(ix), l
-        ld      -7(ix), h
-        ld      -6(ix), e
-        ld      -5(ix), d
-        xor     a
-        ld      d, a
-        ld      e, a
-        ld      h, a
-        ld      l, a
-        jr      .store_remainder
 
         ;; 32 iterations, restoring division
 .run_div:
@@ -246,17 +117,7 @@ __divulong:
 .next_bit:
         djnz    .u32_div_loop
 
-.store_remainder:
-        ;; store remainder to static cell
-        ld      a, -8(ix)
-        ld      (__last_remainder_ulong+0), a
-        ld      a, -7(ix)
-        ld      (__last_remainder_ulong+1), a
-        ld      a, -6(ix)
-        ld      (__last_remainder_ulong+2), a
-        ld      a, -5(ix)
-        ld      (__last_remainder_ulong+3), a
-
+.finish:
         ;; quotient currently internal (DE high, HL low) -> ABI wants (DE low, HL high)
         ex      de, hl
 
@@ -264,22 +125,3 @@ __divulong:
         ld      sp, ix
         pop     ix
         ret
-
-
-__get_remainder_ulong:
-        ;; returns last remainder from static cell as DE low, HL high
-        ld      hl, #__last_remainder_ulong
-        ld      e, (hl)
-        inc     hl
-        ld      d, (hl)
-        inc     hl
-        ld      a, (hl)
-        inc     hl
-        ld      h, (hl)
-        ld      l, a
-        ret
-
-
-        .area   _DATA
-__last_remainder_ulong:
-        .ds     4

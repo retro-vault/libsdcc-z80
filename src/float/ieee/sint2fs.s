@@ -18,6 +18,7 @@
         ;; clobbers: af, bc, de, hl
         .globl  ___sint2fs
         .globl  ___uint2fs
+        ;; ___sint2fs
 ___sint2fs:
         ;; zero shortcut
         ld      a,h

@@ -60,6 +60,10 @@
 ;;   ix-18 : prod[5]    (MSB)
 ;; ============================================================
 
+        ;; ___fsmul
+        ;; inputs:  a in HLDE, b on caller stack (4 bytes)
+        ;; outputs: HLDE = IEEE-754 single product a * b
+        ;; clobbers: af, bc, de, hl, ix
 ___fsmul:
         push    ix
         ld      ix,#0
@@ -80,25 +84,25 @@ ___fsmul:
         ;; ---- check for zero exponent ----
         ld      a,c
         or      a
-        jp      z,ret_zero
+        jp      z,.ret_zero
         ld      a,b
         or      a
-        jp      z,ret_zero
+        jp      z,.ret_zero
 
         ;; ---- result exponent: EA + EB - 127 ----
         ld      a,c
         add     a,b
-        jr      c,exp_carry
+        jr      c,.exp_carry
         cp      #127
-        jp      c,ret_zero
+        jp      c,.ret_zero
         sub     #127
-        jr      exp_store
+        jr      .exp_store
 
-exp_carry:
+.exp_carry:
         add     a,#129
-        jp      c,ret_inf
+        jp      c,.ret_inf
 
-exp_store:
+.exp_store:
         ld      -6(ix),a
 
         ;; ---- build mantissas A/B (with implicit 1) ----
@@ -118,111 +122,111 @@ exp_store:
         ;; a[0] * b[0] -> prod[1:0]
         ld      l,-7(ix)
         ld      h,-10(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      -13(ix),l
         ld      -14(ix),h
 
         ;; a[0] * b[1] -> prod[2:1]
         ld      l,-7(ix)
         ld      h,-11(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      a,-14(ix)
         add     a,l
         ld      -14(ix),a
         ld      a,-15(ix)
         adc     a,h
         ld      -15(ix),a
-        jr      nc,pp02
+        jr      nc,.pp02
         inc     -16(ix)
-pp02:
+.pp02:
         ;; a[0] * b[2] -> prod[3:2]
         ld      l,-7(ix)
         ld      h,-12(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      a,-15(ix)
         add     a,l
         ld      -15(ix),a
         ld      a,-16(ix)
         adc     a,h
         ld      -16(ix),a
-        jr      nc,pp10
+        jr      nc,.pp10
         inc     -17(ix)
-pp10:
+.pp10:
         ;; a[1] * b[0] -> prod[2:1]
         ld      l,-8(ix)
         ld      h,-10(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      a,-14(ix)
         add     a,l
         ld      -14(ix),a
         ld      a,-15(ix)
         adc     a,h
         ld      -15(ix),a
-        jr      nc,pp11
+        jr      nc,.pp11
         inc     -16(ix)
-        jr      nz,pp11
+        jr      nz,.pp11
         inc     -17(ix)
-pp11:
+.pp11:
         ;; a[1] * b[1] -> prod[3:2]
         ld      l,-8(ix)
         ld      h,-11(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      a,-15(ix)
         add     a,l
         ld      -15(ix),a
         ld      a,-16(ix)
         adc     a,h
         ld      -16(ix),a
-        jr      nc,pp12
+        jr      nc,.pp12
         inc     -17(ix)
-        jr      nz,pp12
+        jr      nz,.pp12
         inc     -18(ix)
-pp12:
+.pp12:
         ;; a[1] * b[2] -> prod[4:3]
         ld      l,-8(ix)
         ld      h,-12(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      a,-16(ix)
         add     a,l
         ld      -16(ix),a
         ld      a,-17(ix)
         adc     a,h
         ld      -17(ix),a
-        jr      nc,pp20
+        jr      nc,.pp20
         inc     -18(ix)
-pp20:
+.pp20:
         ;; a[2] * b[0] -> prod[3:2]
         ld      l,-9(ix)
         ld      h,-10(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      a,-15(ix)
         add     a,l
         ld      -15(ix),a
         ld      a,-16(ix)
         adc     a,h
         ld      -16(ix),a
-        jr      nc,pp21
+        jr      nc,.pp21
         inc     -17(ix)
-        jr      nz,pp21
+        jr      nz,.pp21
         inc     -18(ix)
-pp21:
+.pp21:
         ;; a[2] * b[1] -> prod[4:3]
         ld      l,-9(ix)
         ld      h,-11(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      a,-16(ix)
         add     a,l
         ld      -16(ix),a
         ld      a,-17(ix)
         adc     a,h
         ld      -17(ix),a
-        jr      nc,pp22
+        jr      nc,.pp22
         inc     -18(ix)
-pp22:
+.pp22:
         ;; a[2] * b[2] -> prod[5:4]
         ld      l,-9(ix)
         ld      h,-12(ix)
-        call    mul8x8
+        call    .mul8x8
         ld      a,-17(ix)
         add     a,l
         ld      -17(ix),a
@@ -235,20 +239,20 @@ pp22:
         ld      c,-6(ix)
 
         bit     7,-18(ix)
-        jr      z,no_shift
+        jr      z,.no_shift
 
         ;; bit47=1: shift right, exp++
         inc     c
-        jr      z,ret_inf
+        jr      z,.ret_inf
 
         ld      e,-16(ix)
         ld      d,-17(ix)
         ld      a,-18(ix)
         and     #0x7F
         ld      l,a
-        jr      pack
+        jr      .pack
 
-no_shift:
+.no_shift:
         ;; bit46=1: shift prod[5:2] left by 1
         ld      a,-15(ix)
         add     a,a
@@ -263,16 +267,16 @@ no_shift:
         and     #0x7F
         ld      l,a
 
-pack:
+.pack:
         call    __fp_pack_norm
 
-        jr      cleanup
+        jr      .cleanup
 
-ret_zero:
+.ret_zero:
         call    __fp_zero32
-        jr      cleanup
+        jr      .cleanup
 
-ret_inf:
+.ret_inf:
         ld      a,-5(ix)
         or      #0x7F
         ld      h,a
@@ -280,31 +284,31 @@ ret_inf:
         ld      d,#0
         ld      e,#0
 
-cleanup:
+.cleanup:
         ld      sp,ix
         pop     ix
         jp      __fp_retpop4
 
 
 ;; ============================================================
-;; mul8x8: unsigned 8x8 -> 16-bit multiply
+;; .mul8x8: unsigned 8x8 -> 16-bit multiply
 ;; Input:  L = multiplicand, H = multiplier
 ;; Output: HL = product
 ;; Clobbers: A, B, DE
 ;; ============================================================
-mul8x8:
+.mul8x8:
         ld      d,#0
         ld      e,l
         ld      l,#0
         ld      a,h
         ld      h,#0
         ld      b,#8
-mul8_loop:
+.mul8_loop:
         rra
-        jr      nc,mul8_skip
+        jr      nc,.mul8_skip
         add     hl,de
-mul8_skip:
+.mul8_skip:
         sla     e
         rl      d
-        djnz    mul8_loop
+        djnz    .mul8_loop
         ret

@@ -20,6 +20,10 @@
         .globl  ___fslt
         .globl  ___fscmp
 
+        ;; ___fslt
+        ;; inputs:  a in HL:DE, b on stack (2 words after return address)
+        ;; outputs: A = 1 if a < b else 0
+        ;; clobbers: af, bc, de, hl, ix
 ___fslt:
         ;; Stack on entry: ret_to_caller, b.low, b.high
         ;; a is in HL:DE (must preserve this!)
@@ -39,14 +43,14 @@ ___fslt:
         ;; Check if DE == -1
         ld      a,d
         inc     a
-        jr      nz, ret_false
+        jr      nz, .ret_false
         ld      a,e
         inc     a
-        jr      nz, ret_false
+        jr      nz, .ret_false
 
         ld      a,#1
         ret
 
-ret_false:
+.ret_false:
         xor     a
         ret

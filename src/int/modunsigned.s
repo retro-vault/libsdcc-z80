@@ -1,10 +1,11 @@
         ;; unsigned modulus helpers for 8-bit and 16-bit integers
         ;; calls unsigned divide helpers and returns the remainder
         ;;
-        ;; code from sdcc project
+        ;; loosely based on code from sdcc project
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2009-2010 philipp klaus krause
+        ;; copyright (c) 2026 tomaz stih
 		
         .module modunsigned                      ; module name
         .optsdcc -mz80 sdcccall(1)

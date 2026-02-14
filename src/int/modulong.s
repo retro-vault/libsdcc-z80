@@ -1,6 +1,4 @@
-        ;; unsigned 32-bit modulus (long)
-        ;;
-        ;; implemented by reusing __divulong and its stored remainder.
+        ;; unsigned 32-bit modulus (long), reentrant
         ;;
         ;; ABI (sdcccall(1), matches your build):
         ;;   x (dividend) in regs:  DE = low16, HL = high16
@@ -8,6 +6,8 @@
         ;; returns:
         ;;   remainder in regs:     DE = low16, HL = high16
         ;;
+        ;; gpl-2.0-or-later (see: LICENSE)
+        ;; copyright (c) 2026 tomaz stih
 
         .module modulong
         .optsdcc -mz80 sdcccall(1)
@@ -15,31 +15,108 @@
         .area   _CODE
 
         .globl  __modulong
-        .globl  __divulong
-        .globl  __get_remainder_ulong
 
+        ;; locals (relative to ix):
+        ;;   -8..-5  : remainder (low..high)
+        ;;   -12..-9 : divisor y (low..high)
+        ;; __modulong
+        ;; inputs:  x in DE:HL (DE=low16, HL=high16), y at 4(ix)..7(ix) (lsb..msb)
+        ;; outputs: DE:HL = x % y (DE=low16, HL=high16)
+        ;; clobbers: af, bc, de, hl, ix
 __modulong:
-        ;; __divulong expects divisor bytes at 4(ix)..7(ix) relative to
-        ;; its own frame. Preserve that by tail-jumping with a synthetic
-        ;; return address directly above the original divisor bytes.
-        pop     bc
-        ld      a, c
-        ld      (__modulong_ret+0), a
-        ld      a, b
-        ld      (__modulong_ret+1), a
+        push    ix
+        ld      ix, #0
+        add     ix, sp
 
-        ld      bc, #.after_div
-        push    bc
-        jp      __divulong
+        ;; save incoming x.high (HL) into BC; HL needed for frame math
+        ld      b, h
+        ld      c, l
 
-.after_div:
-        ld      a, (__modulong_ret+0)
-        ld      c, a
-        ld      a, (__modulong_ret+1)
-        ld      b, a
-        push    bc
-        jp      __get_remainder_ulong
+        ;; reserve 12 bytes locals
+        ld      hl, #-12
+        add     hl, sp
+        ld      sp, hl
 
-        .area   _DATA
-__modulong_ret:
-        .ds     2
+        ;; restore HL (x.high)
+        ld      h, b
+        ld      l, c
+
+        ;; normalize dividend into internal order DE:HL = high:low
+        ;; incoming: DE low, HL high -> internal: DE high, HL low
+        ex      de, hl
+
+        ;; remainder = 0
+        xor     a
+        ld      -8(ix), a
+        ld      -7(ix), a
+        ld      -6(ix), a
+        ld      -5(ix), a
+
+        ;; copy divisor y into -12..-9 from 4..7(ix) (low..high)
+        ld      a, 4(ix)
+        ld      -12(ix), a
+        ld      a, 5(ix)
+        ld      -11(ix), a
+        ld      a, 6(ix)
+        ld      -10(ix), a
+        ld      a, 7(ix)
+        ld      -9(ix), a
+
+        ;; 32 iterations, restoring division (remainder only)
+        ld      b, #32
+
+.u32_mod_loop:
+        ;; shift dividend register left by 1 to feed next bit
+        add     hl, hl
+        rl      e
+        rl      d
+
+        ;; remainder <<= 1, bring in carry from dividend shift
+        rl      -8(ix)
+        rl      -7(ix)
+        rl      -6(ix)
+        rl      -5(ix)
+
+        ;; try remainder -= divisor
+        or      a
+        ld      a, -8(ix)
+        sbc     a, -12(ix)
+        ld      -8(ix), a
+        ld      a, -7(ix)
+        sbc     a, -11(ix)
+        ld      -7(ix), a
+        ld      a, -6(ix)
+        sbc     a, -10(ix)
+        ld      -6(ix), a
+        ld      a, -5(ix)
+        sbc     a, -9(ix)
+        ld      -5(ix), a
+        jr      nc, .next_bit
+
+        ;; borrow -> restore remainder
+        or      a
+        ld      a, -8(ix)
+        adc     a, -12(ix)
+        ld      -8(ix), a
+        ld      a, -7(ix)
+        adc     a, -11(ix)
+        ld      -7(ix), a
+        ld      a, -6(ix)
+        adc     a, -10(ix)
+        ld      -6(ix), a
+        ld      a, -5(ix)
+        adc     a, -9(ix)
+        ld      -5(ix), a
+
+.next_bit:
+        djnz    .u32_mod_loop
+
+        ;; return remainder in ABI order DE low, HL high
+        ld      e, -8(ix)
+        ld      d, -7(ix)
+        ld      l, -6(ix)
+        ld      h, -5(ix)
+
+        ld      sp, ix
+        pop     ix
+        ret

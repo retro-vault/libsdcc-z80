@@ -2,11 +2,12 @@
         ;; provides __divuchar (8/8) and __divuint (16/16), with two paths
         ;; optimized for small or large divisors
         ;;
-        ;; code from sdcc project (origin: gbdk by pascal felber)
+        ;; loosely based on code from sdcc project (origin: gbdk by pascal felber)
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2000-2021 michael hope, philipp klaus krause,
         ;; marco bodrato
+        ;; copyright (c) 2026 tomaz stih
         
         .module divunsigned                       ; module name
         .optsdcc -mz80 sdcccall(1)
@@ -36,6 +37,7 @@ __divu8::
         ;; clobbers: a, b, d, e, h, l, f
         ;; notes: chooses fast path when divisor < 2^7, else wide path
 __divuint:
+        ;; __divu16
 __divu16::
         ld      a, e                              ; test high bit of divisor
         and     a, #0x80                          ; keep bit7 of e

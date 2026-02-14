@@ -16,6 +16,10 @@
         .globl  __fs2u32mag
         .globl  __fp_zero32
 
+        ;; ___fs2slong
+        ;; inputs:  DE:HL = IEEE-754 single
+        ;; outputs: HL:DE = signed 32-bit integer (trunc toward zero, saturating)
+        ;; clobbers: af, bc, de, hl
 ___fs2slong:
         ;; arrange: HL = low word, DE = high word
         ex      de,hl

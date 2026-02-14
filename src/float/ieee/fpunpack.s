@@ -18,6 +18,10 @@
         .area   _CODE
         .globl  __fp_unpack_sign_exps
 
+        ;; __fp_unpack_sign_exps
+        ;; inputs:  IX frame with a3/a2 at -1/-2(ix), b3/b2 at 7/6(ix)
+        ;; outputs: -5(ix)=sign(a)^sign(b), C=exp(a), B=exp(b)
+        ;; clobbers: af, bc
 __fp_unpack_sign_exps:
         ;; result sign
         ld      a,-1(ix)

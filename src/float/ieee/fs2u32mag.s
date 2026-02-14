@@ -21,6 +21,10 @@
         .area   _CODE
         .globl  __fs2u32mag
 
+        ;; __fs2u32mag
+        ;; inputs:  C=e(0..31), E=a2, H=a1, L=a0 from unpacked float
+        ;; outputs: DE:HL = unsigned 32-bit magnitude (DE high, HL low)
+        ;; clobbers: af, c, de, hl
 __fs2u32mag:
         ;; build 24-bit mantissa in DE:HL = 0 : M2 : M1 : M0
         ld      a,e

@@ -17,6 +17,10 @@
         .area   _CODE
         .globl  __fp_unpack_mant24_ab
 
+        ;; __fp_unpack_mant24_ab
+        ;; inputs:  IX frame with a at -4..-1(ix), b at 4..7(ix)
+        ;; outputs: mant_a to -7..-9(ix), mant_b to -10..-12(ix)
+        ;; clobbers: af
 __fp_unpack_mant24_ab:
         ;; mantissa A (from saved register operand)
         ld      a,-4(ix)

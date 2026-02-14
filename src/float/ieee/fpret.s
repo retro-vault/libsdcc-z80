@@ -14,6 +14,10 @@
         .area   _CODE
         .globl  __fp_retpop4
 
+        ;; __fp_retpop4
+        ;; inputs:  stack = return address + one 32-bit arg to discard
+        ;; outputs: returns to caller with stack cleaned by 4 bytes
+        ;; clobbers: af, bc
 __fp_retpop4:
         pop     bc                              ; save return address
         pop     af                              ; drop arg low word

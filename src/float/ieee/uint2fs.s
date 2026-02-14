@@ -15,6 +15,7 @@
         ;; outputs: hl:de = (float)a  (ieee-754 single, hl=high word, de=low word)
         ;; clobbers: af, bc, de, hl
         .globl  ___uint2fs
+        ;; ___uint2fs
 ___uint2fs:
         ;; zero?
         ld      a,h

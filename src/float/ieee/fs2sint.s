@@ -16,6 +16,10 @@
         .globl  ___fs2sint
         .globl  __fs2u16mag
 
+        ;; ___fs2sint
+        ;; inputs:  DE:HL = IEEE-754 single (E=a0, D=a1, L=a2, H=a3)
+        ;; outputs: DE = signed 16-bit integer (trunc toward zero, saturating)
+        ;; clobbers: af, bc, de, hl
 ___fs2sint:
         ;; normalize to:
         ;;   B:C = high word bytes (a3:a2)

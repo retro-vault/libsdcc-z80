@@ -1,10 +1,11 @@
         ;; signed 16x16 -> 32 multiply using unsigned core and sign fix
         ;; takes signed hl and de, multiplies via ___muluint2ulong, negates if needed
         ;;
-        ;; code from sdcc project
+        ;; loosely based on code from sdcc project
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2021 philipp klaus krause
+        ;; copyright (c) 2026 tomaz stih
 		
         .module __mulsint2slong                   ; module name
         .optsdcc -mz80 sdcccall(1)
@@ -24,7 +25,7 @@ ___mulsint2slong:
         ld      bc, #0                           ; b=0, c=0 (assume positive)
 
         bit     #7, h                            ; test sign of hl
-        jr      z, hl_nonneg                     ; if non-negative, skip negate
+        jr      z, .hl_nonneg                     ; if non-negative, skip negate
         ld      a, b                             ; a = 0
         sub     a, l                             ; l <- -l
         ld      l, a
@@ -32,9 +33,9 @@ ___mulsint2slong:
         sbc     a, h                             ; h <- -h with borrow
         ld      h, a
         inc     c                                ; flip sign flag (c^=1)
-hl_nonneg:
+.hl_nonneg:
         bit     #7, d                            ; test sign of de
-        jr      z, de_nonneg                     ; if non-negative, skip negate
+        jr      z, .de_nonneg                     ; if non-negative, skip negate
         ld      a, b                             ; a = 0
         sub     a, e                             ; e <- -e
         ld      e, a
@@ -42,7 +43,7 @@ hl_nonneg:
         sbc     a, d                             ; d <- -d with borrow
         ld      d, a
         inc     c                                ; flip sign flag (c^=1)
-de_nonneg:
+.de_nonneg:
         push    bc                               ; save sign flag (c) and b=0
         call    ___muluint2ulong                 ; unsigned multiply de:hl
         pop     bc                               ; restore b=0, c=sign flag

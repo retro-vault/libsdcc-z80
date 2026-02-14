@@ -1,10 +1,11 @@
         ;; signed/unsigned mixed division helpers (8-bit × 8-bit)
         ;; handles a/signed dividend with u/signed divisor using 16-bit core
         ;;
-        ;; code from sdcc project
+        ;; loosely based on code from sdcc project
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2010-2021 philipp klaus krause
+        ;; copyright (c) 2026 tomaz stih
 		
         .module divmixed                           ; module name
         .optsdcc -mz80 sdcccall(1)

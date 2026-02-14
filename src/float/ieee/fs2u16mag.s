@@ -21,6 +21,10 @@
         .area   _CODE
         .globl  __fs2u16mag
 
+        ;; __fs2u16mag
+        ;; inputs:  A=e(0..15), C=a2, H=a1, L=a0 from unpacked float
+        ;; outputs: DE = unsigned 16-bit magnitude
+        ;; clobbers: af, bc, de
 __fs2u16mag:
         ld      e,a
 

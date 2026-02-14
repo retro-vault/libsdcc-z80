@@ -1,10 +1,11 @@
         ;; signed modulus helpers for 8-bit and 16-bit integers
         ;; uses signed divide helpers and normalizes the remainder sign
         ;;
-        ;; code from sdcc project
+        ;; loosely based on code from sdcc project
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2009-2021 philipp klaus krause
+        ;; copyright (c) 2026 tomaz stih
 		
         .module modsigned                         ; module name
         .optsdcc -mz80 sdcccall(1)

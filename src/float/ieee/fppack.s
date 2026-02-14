@@ -18,6 +18,10 @@
         .area   _CODE
         .globl  __fp_pack_norm
 
+        ;; __fp_pack_norm
+        ;; inputs:  B=sign mask, C=biased exponent, L=mantissa hi7, DE=mantissa low16
+        ;; outputs: HLDE = packed IEEE-754 single
+        ;; clobbers: af, hl
 __fp_pack_norm:
         ld      a,c
         rrca

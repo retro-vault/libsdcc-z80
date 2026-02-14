@@ -1,10 +1,11 @@
         ;; signed division helpers (8 and 16 bit), with remainder fixup
         ;; builds signed operands, divides via __divu16, fixes signs
         ;;
-        ;; code from sdcc project
+        ;; loosely based on code from sdcc project
         ;;
         ;; gpl-2.0-or-later (see: LICENSE)
         ;; copyright (c) 2000-2021 michael hope, philipp klaus krause
+        ;; copyright (c) 2026 tomaz stih
         
         .module divsigned                          ; module name
         .optsdcc -mz80 sdcccall(1)
@@ -48,6 +49,7 @@ __div_signexte::
         ;; clobbers: a, b, d, e, h, l, f
         ;; notes: take abs values, do unsigned divide, then fix signs
 __divsint:
+        ;; __div16
 __div16::
         ld      a, h                              ; get high byte of dividend
         xor     a, d                              ; xor with high byte of divisor
@@ -84,14 +86,7 @@ __div16::
         ; negate quotient if it should be negative
         pop     af                                ; recover quotient sign
         ret     nc                                ; if positive, done
-        ld      b, a                              ; save a
-        sub     a, a                              ; a = 0
-        sub     a, e                              ; a = -low(q)
-        ld      e, a                              ; e = low(q) negated
-        sbc     a, a                              ; a = ff if borrow
-        sub     a, d                              ; a = -high(q) - borrow
-        ld      d, a                              ; d = high(q) negated
-        ld      a, b                              ; restore a
+        call    .neg_de
         ret
 
         ;; __get_remainder
@@ -102,10 +97,14 @@ __get_remainder::
         rla                                       ; carry -> sign(remainder?)
         ex      de, hl                            ; work on remainder in de
         ret     nc                                ; if positive, done
+        call    .neg_de
+        ret
+
+.neg_de:
         sub     a, a                              ; a = 0
-        sub     a, e                              ; a = -low(r)
-        ld      e, a                              ; e = low(r) negated
+        sub     a, e                              ; a = -low
+        ld      e, a                              ; e = low negated
         sbc     a, a                              ; a = ff if borrow
-        sub     a, d                              ; a = -high(r) - borrow
-        ld      d, a                              ; d = high(r) negated
+        sub     a, d                              ; a = -high - borrow
+        ld      d, a                              ; d = high negated
         ret

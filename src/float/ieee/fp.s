@@ -14,6 +14,7 @@
         ;; outputs: de:hl = 0x00000000
         ;; clobbers: af, de, hl
         .globl  __fp_zero32
+        ;; __fp_zero32
 __fp_zero32:
 .zero32:
         xor     a
@@ -28,6 +29,7 @@ __fp_zero32:
         ;; outputs: hl = 0x0000
         ;; clobbers: af, hl
         .globl  __fp_zero16
+        ;; __fp_zero16
 __fp_zero16:
 .zero16:
         xor     a

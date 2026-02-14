@@ -33,6 +33,10 @@
         ;;  -3      : sy (sign of Y)  0x00/0x80
         ;;  -2      : ex (biased exp of X, 0..255)
         ;;  -1      : diff
+        ;; ___fsadd
+        ;; inputs:  a in DEHL, b on caller stack (4 bytes)
+        ;; outputs: DEHL = IEEE-754 single sum
+        ;; clobbers: af, bc, de, hl, ix
 ___fsadd::
         push    ix
         ld      ix,#0

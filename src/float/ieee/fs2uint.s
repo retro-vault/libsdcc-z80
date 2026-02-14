@@ -15,6 +15,10 @@
         .globl  ___fs2uint
         .globl  __fs2u16mag
 
+        ;; ___fs2uint
+        ;; inputs:  DE:HL = IEEE-754 single
+        ;; outputs: DE = unsigned 16-bit integer (trunc toward zero, saturating)
+        ;; clobbers: af, bc, de, hl
 ___fs2uint:
         ;; normalize to:
         ;;   B:C = high word bytes (a3:a2)

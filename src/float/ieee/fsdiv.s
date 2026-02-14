@@ -53,6 +53,10 @@
 ;;   ix-16 : integer bit (0 or 1)
 ;; ============================================================
 
+        ;; ___fsdiv
+        ;; inputs:  a in HLDE, b on caller stack (4 bytes)
+        ;; outputs: HLDE = IEEE-754 single quotient a / b
+        ;; clobbers: af, bc, de, hl, ix
 ___fsdiv:
         push    ix
         ld      ix,#0
@@ -71,10 +75,10 @@ ___fsdiv:
         ;; ---- check zero/denormal ----
         ld      a,c
         or      a
-        jp      z,ret_zero
+        jp      z,.ret_zero
         ld      a,b
         or      a
-        jp      z,ret_maxfin
+        jp      z,.ret_maxfin
 
         ;; ---- result exponent ----
         ld      h,#0
@@ -88,20 +92,20 @@ ___fsdiv:
 
         ld      a,h
         or      a
-        jp      nz,div_exp_out
+        jp      nz,.div_exp_out
         ld      a,l
         or      a
-        jp      z,ret_zero
+        jp      z,.ret_zero
         cp      #255
-        jp      nc,ret_maxfin
-        jr      div_exp_ok
+        jp      nc,.ret_maxfin
+        jr      .div_exp_ok
 
-div_exp_out:
+.div_exp_out:
         bit     7,h
-        jp      nz,ret_zero
-        jp      ret_maxfin
+        jp      nz,.ret_zero
+        jp      .ret_maxfin
 
-div_exp_ok:
+.div_exp_ok:
         ld      -6(ix),l
 
         ;; ---- build mantissas A/B (with implicit 1) ----
@@ -121,17 +125,17 @@ div_exp_ok:
         ;; ---- integer bit ----
         ld      a,d
         cp      -12(ix)
-        jr      c,int_bit_zero
-        jr      nz,int_bit_one
+        jr      c,.int_bit_zero
+        jr      nz,.int_bit_one
         ld      a,e
         cp      -11(ix)
-        jr      c,int_bit_zero
-        jr      nz,int_bit_one
+        jr      c,.int_bit_zero
+        jr      nz,.int_bit_one
         ld      a,c
         cp      -10(ix)
-        jr      c,int_bit_zero
+        jr      c,.int_bit_zero
 
-int_bit_one:
+.int_bit_one:
         ld      a,c
         sub     -10(ix)
         ld      c,a
@@ -142,37 +146,37 @@ int_bit_one:
         sbc     a,-12(ix)
         ld      d,a
         ld      -16(ix),#1
-        jr      div_start
+        jr      .div_start
 
-int_bit_zero:
+.int_bit_zero:
         ld      a,-6(ix)
         dec     a
-        jp      z,ret_zero
+        jp      z,.ret_zero
         ld      -6(ix),a
         ld      -16(ix),#0
 
-div_start:
+.div_start:
         ld      b,#24
 
-div_loop:
+.div_loop:
         sla     c
         rl      e
         rl      d
-        jr      c,div_do_sub
+        jr      c,.div_do_sub
 
         ld      a,d
         cp      -12(ix)
-        jr      c,div_no_sub
-        jr      nz,div_do_sub
+        jr      c,.div_no_sub
+        jr      nz,.div_do_sub
         ld      a,e
         cp      -11(ix)
-        jr      c,div_no_sub
-        jr      nz,div_do_sub
+        jr      c,.div_no_sub
+        jr      nz,.div_do_sub
         ld      a,c
         cp      -10(ix)
-        jr      c,div_no_sub
+        jr      c,.div_no_sub
 
-div_do_sub:
+.div_do_sub:
         ld      a,c
         sub     -10(ix)
         ld      c,a
@@ -183,16 +187,16 @@ div_do_sub:
         sbc     a,-12(ix)
         ld      d,a
         scf
-        jr      div_shift_q
+        jr      .div_shift_q
 
-div_no_sub:
+.div_no_sub:
         or      a
 
-div_shift_q:
+.div_shift_q:
         rl      -13(ix)
         rl      -14(ix)
         rl      -15(ix)
-        djnz    div_loop
+        djnz    .div_loop
 
         ;; ---- normalize and pack ----
         ld      b,-5(ix)
@@ -200,13 +204,13 @@ div_shift_q:
 
         ld      a,-16(ix)
         or      a
-        jr      z,div_pack_noshift
+        jr      z,.div_pack_noshift
 
         srl     -15(ix)
         rr      -14(ix)
         rr      -13(ix)
 
-div_pack_noshift:
+.div_pack_noshift:
         res     7,-15(ix)
 
         ld      e,-13(ix)
@@ -214,13 +218,13 @@ div_pack_noshift:
         ld      l,-15(ix)
         call    __fp_pack_norm
 
-        jr      cleanup
+        jr      .cleanup
 
-ret_zero:
+.ret_zero:
         call    __fp_zero32
-        jr      cleanup
+        jr      .cleanup
 
-ret_maxfin:
+.ret_maxfin:
         ld      a,-5(ix)
         or      #0x7F
         ld      h,a
@@ -228,7 +232,7 @@ ret_maxfin:
         ld      d,#0xFF
         ld      e,#0xFF
 
-cleanup:
+.cleanup:
         ld      sp,ix
         pop     ix
         jp      __fp_retpop4
