@@ -1,5 +1,5 @@
         ;;
-        ;; signed 32-bit division (long), reentrant
+        ;; signed 32-bit division (long)
         ;;
         ;; ABI (sdcccall(1), matches your build):
         ;;   x (dividend) in regs:  DE = low16, HL = high16
@@ -17,6 +17,7 @@
         .area   _CODE
 
         .globl  __divslong
+        .globl  __get_remainder_slong
 
         ;; locals (relative to ix):
         ;;   -1      : sign_q (0/1) = sign(x) xor sign(y)
@@ -164,6 +165,35 @@ __divslong:
 .next_bit:
         djnz    .u32_div_loop
 
+        ;; normalize remainder sign to original dividend sign and store
+        ;; for __modslong helper path.
+        ld      a, -2(ix)
+        or      a
+        jr      z, .store_remainder
+
+        xor     a
+        sub     a, -10(ix)
+        ld      -10(ix), a
+        ld      a, #0
+        sbc     a, -9(ix)
+        ld      -9(ix), a
+        ld      a, #0
+        sbc     a, -8(ix)
+        ld      -8(ix), a
+        ld      a, #0
+        sbc     a, -7(ix)
+        ld      -7(ix), a
+
+.store_remainder:
+        ld      a, -10(ix)
+        ld      (__last_remainder_slong+0), a
+        ld      a, -9(ix)
+        ld      (__last_remainder_slong+1), a
+        ld      a, -8(ix)
+        ld      (__last_remainder_slong+2), a
+        ld      a, -7(ix)
+        ld      (__last_remainder_slong+3), a
+
         ;; apply quotient sign if needed (sign_q in -1(ix))
         ld      a, -1(ix)
         or      a
@@ -190,3 +220,20 @@ __divslong:
         ld      sp, ix
         pop     ix
         ret
+
+__get_remainder_slong:
+        ;; returns last remainder as DE low, HL high
+        ld      hl, #__last_remainder_slong
+        ld      e, (hl)
+        inc     hl
+        ld      d, (hl)
+        inc     hl
+        ld      a, (hl)
+        inc     hl
+        ld      h, (hl)
+        ld      l, a
+        ret
+
+        .area   _DATA
+__last_remainder_slong:
+        .ds     4
