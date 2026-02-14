@@ -101,7 +101,7 @@ Use the GitHub Issues at the top of this page.
 [language.url]:   https://rosettacode.org/wiki/Category:Z80_Assembly
 [language.badge]: https://img.shields.io/badge/language-Z80%20Assembly-blue.svg
 
-[license.url]:    https://github.com/tstih/nice/blob/master/LICENSE
+[license.url]:    https://github.com/retro-vault/libsdcc-z80/blob/main/LICENSE
 [license.badge]:  https://img.shields.io/badge/license-GPL2-blue.svg
 
 [status.badge]:  https://img.shields.io/badge/status-stable-dkgreen.svg

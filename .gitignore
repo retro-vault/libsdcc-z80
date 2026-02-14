@@ -2,6 +2,8 @@
 .vscode/
 lab/
 build/
+bin/
+!bin/*.lib
 
 # SDCC
 *.lst
