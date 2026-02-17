@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build
+        run: |
+          make clean
+          make
+
+      - name: Package
+        id: package
+        run: |
+          set -euo pipefail
+
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          ARCHIVE_NAME="libsdcc-z80-${VERSION}.tar.gz"
+          STAGE_DIR="release/libsdcc-z80-${VERSION}"
+
+          rm -rf release
+          mkdir -p "${STAGE_DIR}"
+
+          cp -r bin "${STAGE_DIR}/lib"
+          cp LICENSE "${STAGE_DIR}/LICENSE"
+          cp COPYRIGHT "${STAGE_DIR}/COPYRIGHT"
+
+          {
+            echo "libsdcc-z80 ${VERSION}"
+            echo
+            echo "Release package for libsdcc-z80."
+            echo
+            echo "Contents:"
+            echo "- lib/: built libraries and crt0"
+            echo "- LICENSE"
+            echo "- COPYRIGHT"
+          } > "${STAGE_DIR}/README-release.txt"
+
+          tar -C release -czf "release/${ARCHIVE_NAME}" "libsdcc-z80-${VERSION}"
+
+          echo "archive_name=${ARCHIVE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "archive_path=release/${ARCHIVE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate release notes
+        run: |
+          set -euo pipefail
+
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${{ steps.package.outputs.version }}"
+          RELEASE_DATE="$(date -u '+%b %-d, %Y')"
+          BODY_FILE="release/release-notes.txt"
+          CHANGES_FILE="release/changes.txt"
+
+          PREV_TAG="$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -n 1 || true)"
+          if [ -n "${PREV_TAG}" ]; then
+            git log --no-merges --pretty='- %s' "${PREV_TAG}..${TAG}" > "${CHANGES_FILE}" || true
+          else
+            git log --no-merges --pretty='- %s' "${TAG}" > "${CHANGES_FILE}" || true
+          fi
+          if [ ! -s "${CHANGES_FILE}" ]; then
+            printf '%s\n' "- Maintenance release" > "${CHANGES_FILE}"
+          fi
+
+          {
+            echo "v${VERSION}"
+            echo "Released ${RELEASE_DATE}"
+            echo
+            echo "What's changed"
+            cat "${CHANGES_FILE}"
+            echo
+            echo "Assets"
+            echo "- ${{ steps.package.outputs.archive_name }}"
+          } > "${BODY_FILE}"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.package.outputs.version }}
+          body_path: release/release-notes.txt
+          files: |
+            ${{ steps.package.outputs.archive_path }}
