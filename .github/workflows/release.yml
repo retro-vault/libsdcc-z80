@@ -22,7 +22,7 @@ jobs:
       - name: Build
         run: |
           make clean
-          make
+          make lib
 
       - name: Package
         id: package
@@ -35,9 +35,9 @@ jobs:
           STAGE_DIR="release/libsdcc-z80-${VERSION}"
 
           rm -rf release
-          mkdir -p "${STAGE_DIR}"
+          mkdir -p "${STAGE_DIR}/lib"
 
-          cp -r bin "${STAGE_DIR}/lib"
+          cp "bin/libsdcc-z80.lib" "${STAGE_DIR}/lib/"
           cp LICENSE "${STAGE_DIR}/LICENSE"
           cp COPYRIGHT "${STAGE_DIR}/COPYRIGHT"
 
@@ -47,7 +47,7 @@ jobs:
             echo "Release package for libsdcc-z80."
             echo
             echo "Contents:"
-            echo "- lib/: built libraries and crt0"
+            echo "- lib/libsdcc-z80.lib"
             echo "- LICENSE"
             echo "- COPYRIGHT"
           } > "${STAGE_DIR}/README-release.txt"
