@@ -83,6 +83,31 @@ static int test_s16_mul(void){
     int16_t a=mk_s16(-123), b=mk_s16(45), r=(int16_t)(a*b);
     if(r==(int16_t)-5535){ ok(name); return 1; } fail(name); return 0;
 }
+
+static int test_u8s8_mul(void){
+    const char *name="u8 200 * s8 -2 == -400";
+    uint8_t u = mk_u8(200u);
+    int8_t  s = mk_s8((int8_t)-2);
+    int16_t r = (int16_t)(u * s);
+    if (r == (int16_t)-400) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s8u8_mul(void){
+    const char *name="s8 -3 * u8 200 == -600";
+    int8_t  s = mk_s8((int8_t)-3);
+    uint8_t u = mk_u8(200u);
+    int16_t r = (int16_t)(s * u);
+    if (r == (int16_t)-600) { ok(name); return 1; } fail(name); return 0;
+}
+
+static int test_s8s8_mul(void){
+    const char *name="s8 -5 * s8 -7 == 35";
+    int8_t a = mk_s8((int8_t)-5);
+    int8_t b = mk_s8((int8_t)-7);
+    int16_t r = (int16_t)(a * b);
+    if (r == (int16_t)35) { ok(name); return 1; } fail(name); return 0;
+}
+
 static int test_s16_div(void){
     const char *name="s16 -30000/1000==-30";
     int16_t a=mk_s16(-30000), b=mk_s16(1000), r=(int16_t)(a/b);
@@ -649,6 +674,9 @@ void main(void){
     total++; passed += test_u16_div();
     total++; passed += test_u16_mod();
     total++; passed += test_s16_mul();
+    total++; passed += test_u8s8_mul();
+    total++; passed += test_s8u8_mul();
+    total++; passed += test_s8s8_mul();
     total++; passed += test_s16_div();
     total++; passed += test_s16_mod();
     total++; passed += test_u16_shl();

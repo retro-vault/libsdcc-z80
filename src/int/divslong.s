@@ -17,6 +17,8 @@
 
         .area   _CODE
 
+        .globl  __divslong_rrx_s
+        .globl  __divslong_rrf_s
         .globl  __divslong
 
         ;; locals (relative to ix):
@@ -29,6 +31,8 @@
         ;; inputs:  x in DE:HL (signed), y at 4(ix)..7(ix) (signed, lsb..msb)
         ;; outputs: DE:HL = trunc(x / y) (signed quotient)
         ;; clobbers: af, bc, de, hl, ix
+__divslong_rrx_s::
+__divslong_rrf_s::
 __divslong:
         push    ix
         ld      ix, #0

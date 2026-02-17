@@ -32,6 +32,10 @@ CFLAGS := --std-c11 -mz80 --debug \
           --no-std-crt0 --nostdinc --nostdlib \
           -I. -I$(ROOT)/test/include
 
+# Runtime helper coverage test needs large model/banked code paths enabled.
+RUNTIME_TEST := test_runtime
+RUNTIME_CFLAGS := --model-large --opt-code-size
+
 LIB_MAIN := $(BIN_DIR)/libsdcc-z80.lib
 
 C_SRCS := $(wildcard $(SRC_DIR)/*.c)
@@ -39,13 +43,18 @@ TESTS  := $(basename $(notdir $(C_SRCS)))
 
 IHXS := $(addprefix $(COMPILE_BUILD_DIR)/,$(addsuffix .ihx,$(TESTS)))
 
-.PHONY: all clean
-all: $(IHXS)
+.PHONY: all clean lib-main
+all: lib-main $(IHXS)
+
+# Always rebuild the main runtime library before compile-link checks so
+# newly added helper objects/symbols are present.
+lib-main:
+	$(MAKE) -C "$(ROOT)/src" BUILD_DIR="$(BUILD_DIR)" BIN_DIR="$(BIN_DIR)" all
 
 # Compile each test file
 $(COMPILE_BUILD_DIR)/%.rel: $(SRC_DIR)/%.c
 	mkdir -p "$(dir $@)"
-	$(CC) $(CFLAGS) -c -o "$(abspath $@)" "$<"
+	$(CC) $(CFLAGS) $(if $(filter $(RUNTIME_TEST),$*),$(RUNTIME_CFLAGS),) -c -o "$(abspath $@)" "$<"
 
 # Link each test separately to validate symbols (no tap/bin needed)
 $(COMPILE_BUILD_DIR)/%.ihx: $(COMPILE_BUILD_DIR)/%.rel $(LIB_MAIN)

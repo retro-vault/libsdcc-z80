@@ -17,6 +17,8 @@
         .optsdcc -mz80 sdcccall(1)
 
         .area   _CODE
+        .globl  __mullong_rrx_s
+        .globl  __mullong_rrf_s
         .globl  __mullong
 
         ;; locals:
@@ -28,6 +30,8 @@
         ;; inputs:  a in DE:HL, b at 4(ix)..7(ix) (lsb..msb)
         ;; outputs: DE:HL = low 32 bits of signed product
         ;; clobbers: af, bc, de, hl, ix
+__mullong_rrx_s::
+__mullong_rrf_s::
 __mullong:
         push    ix
         ld      ix, #0

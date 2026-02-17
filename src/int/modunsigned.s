@@ -12,7 +12,11 @@
         
         .area   _CODE                            ; code segment
 
+        .globl  __moduchar_rrx_s
+        .globl  __moduchar_rrf_s
         .globl  __moduchar                       ; export symbols
+        .globl  __moduint_rrx_s
+        .globl  __moduint_rrf_s
         .globl  __moduint
 
         ;; __moduchar
@@ -21,6 +25,8 @@
         ;; clobbers: a, d, e, h, l, f; uses __divu8
         ;; notes: arranges (l<-a, e<-orig l), __divu8 yields q in l, r in e;
         ;;        swap de,hl to return r in l
+__moduchar_rrx_s::
+__moduchar_rrf_s::
 __moduchar:
         ld      e, l                             ; e = divisor (orig l)
         ld      l, a                             ; l = dividend (from a)
@@ -33,6 +39,8 @@ __moduchar:
         ;; outputs: hl = dividend % divisor (16-bit remainder)
         ;; clobbers: a, b, c, d, e, h, l, f; uses __divu16
         ;; notes: __divu16 yields q in hl, r in de; swap to return r in hl
+__moduint_rrx_s::
+__moduint_rrf_s::
 __moduint:
         call    __divu16                         ; unsigned divide 16-bit
         ex      de, hl                           ; place remainder into hl

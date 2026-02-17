@@ -12,7 +12,11 @@
 
         .area   _CODE                             ; code segment
 
+        .globl  __modschar_rrx_s
+        .globl  __modschar_rrf_s
         .globl  __modschar                        ; export symbols
+        .globl  __modsint_rrx_s
+        .globl  __modsint_rrf_s
         .globl  __modsint
 
         ;; __modschar
@@ -22,6 +26,8 @@
         ;;           __get_remainder
         ;; notes: arrange params (l<-a, e<-orig l), call __div8, then
         ;;        tail-jump to __get_remainder which adjusts remainder sign
+__modschar_rrx_s::
+__modschar_rrf_s::
 __modschar:
         ld      e, l                              ; e = divisor (orig l)
         ld      l, a                              ; l = dividend (from a)
@@ -35,6 +41,8 @@ __modschar:
         ;;           __get_remainder
         ;; notes: __div16 produces quotient/remainder; __get_remainder
         ;;        returns properly signed remainder in hl
+__modsint_rrx_s::
+__modsint_rrf_s::
 __modsint:
         call    __div16                           ; signed divide 16-bit
         jp      __get_remainder                   ; finalize remainder in hl

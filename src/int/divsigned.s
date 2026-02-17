@@ -12,7 +12,11 @@
 
         .area   _CODE                              ; code segment
 
+        .globl  __divsint_rrx_s
+        .globl  __divsint_rrf_s
         .globl  __divsint                          ; export symbols
+        .globl  __divschar_rrx_s
+        .globl  __divschar_rrf_s
         .globl  __divschar
 
         ;; __divschar
@@ -20,6 +24,8 @@
         ;; outputs: de = quotient (signed 16-bit), hl = remainder (signed 16-bit)
         ;; clobbers: a, b, d, e, h, l, f; falls into __div8 / __div_signexte
         ;; notes: sign-extends both args into hl and de, then uses 16-bit core
+__divschar_rrx_s::
+__divschar_rrf_s::
 __divschar:
         ld      e, l                              ; e = divisor (orig l)
         ld      l, a                              ; l = dividend low
@@ -48,6 +54,8 @@ __div_signexte::
         ;; outputs: de = quotient (signed 16-bit), hl = remainder (signed 16-bit)
         ;; clobbers: a, b, d, e, h, l, f
         ;; notes: take abs values, do unsigned divide, then fix signs
+__divsint_rrx_s::
+__divsint_rrf_s::
 __divsint:
         ;; __div16
 __div16::

@@ -11,50 +11,68 @@
         .optsdcc -mz80 sdcccall(1)
         .area   _CODE                              ; code segment
 
+        .globl  __mulsuchar_rrx_s
+        .globl  __mulsuchar_rrf_s
         .globl  __mulsuchar                        ; export symbols
+        .globl  __muluschar_rrx_s
+        .globl  __muluschar_rrf_s
         .globl  __muluschar
+        .globl  __mulschar_rrx_s
+        .globl  __mulschar_rrf_s
         .globl  __mulschar
         .globl  __mul16                            ; imported
 
         ;; __muluschar
-        ;; inputs:  a = unsigned lhs, l = signed rhs
-        ;; outputs: de = 16-bit product (via __mul16)
-        ;; clobbers: a, b, c, d, e, f; plus any clobbers from __mul16
-        ;; notes: builds bc unsigned, de signed
-__muluschar:
-        ld      e, a                               ; e = lhs (unsigned)
-        ld      c, l                               ; c = rhs (signed)
-        ld      b, #0                              ; bc = zero-extended rhs? (see below)
-        jr      .signext_e                         ; sign-extend e into d
-
-        ;; __mulsuchar
         ;; inputs:  a = signed lhs, l = unsigned rhs
         ;; outputs: de = 16-bit product (via __mul16)
         ;; clobbers: a, b, c, d, e, f; plus any clobbers from __mul16
-        ;; notes: builds bc signed, de unsigned
-__mulsuchar:
+        ;; notes: builds bc signed (from a), de unsigned (from l)
+__muluschar_rrx_s::
+__muluschar_rrf_s::
+__muluschar:
         ld      c, a                               ; c = lhs (signed)
-        ld      b, #0                              ; b filled by sign extension below
+        ld      a, c                               ; sign-extend lhs into b
+        rlca
+        sbc     a, a
+        ld      b, a
         ld      e, l                               ; e = rhs (unsigned)
-        jr      .signext_e                         ; sign-extend e into d (d becomes 0)
+        ld      d, #0                              ; de = zero-extended rhs
+        jp      __mul16
+
+        ;; __mulsuchar
+        ;; inputs:  a = unsigned lhs, l = signed rhs
+        ;; outputs: de = 16-bit product (via __mul16)
+        ;; clobbers: a, b, c, d, e, f; plus any clobbers from __mul16
+        ;; notes: builds bc unsigned (from a), de signed (from l)
+__mulsuchar_rrx_s::
+__mulsuchar_rrf_s::
+__mulsuchar:
+        ld      c, a                               ; c = lhs (unsigned)
+        ld      b, #0                              ; bc = zero-extended lhs
+        ld      e, l                               ; e = rhs (signed)
+        jr      .signext_e                         ; sign-extend rhs into d
 
         ;; __mulschar
         ;; inputs:  a = signed lhs, l = signed rhs
         ;; outputs: de = 16-bit product (via __mul16)
         ;; clobbers: a, b, c, d, e, f; plus any clobbers from __mul16
         ;; notes: sign-extends both operands into bc and de
+__mulschar_rrx_s::
+__mulschar_rrf_s::
 __mulschar:
         ld      e, l                               ; e = rhs (signed)
         ld      c, a                               ; c = lhs (signed)
 
         ;; sign-extend c into b
-        bit     7, c
-        sbc     a, a                               ; a = 00/ff from carry (carry set iff bit7=1)
+        ld      a, c
+        rlca
+        sbc     a, a                               ; a = 00/ff
         ld      b, a
 
 .signext_e:
         ;; sign-extend e into d
-        bit     7, e
+        ld      a, e
+        rlca
         sbc     a, a                               ; a = 00/ff
         ld      d, a
 

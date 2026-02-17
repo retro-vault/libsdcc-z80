@@ -15,6 +15,8 @@
         .optsdcc -mz80 sdcccall(1)
         .area   _CODE
 
+        .globl  __mulint_rrx_s
+        .globl  __mulint_rrf_s
         .globl  __mulint
         .globl  __mul16
 
@@ -22,6 +24,8 @@
         ;; inputs:  hl = multiplicand, de = multiplier
         ;; outputs: de = product low 16
         ;; clobbers: a, b, c, h, l, f
+__mulint_rrx_s::
+__mulint_rrf_s::
 __mulint:
         ld      c, l
         ld      b, h

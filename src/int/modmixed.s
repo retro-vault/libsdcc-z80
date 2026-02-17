@@ -10,7 +10,11 @@
         .module modmixed                          ; module name
         .optsdcc -mz80 sdcccall(1)
 
+        .globl  __modsuchar_rrx_s
+        .globl  __modsuchar_rrf_s
         .globl  __modsuchar                       ; export symbols
+        .globl  __moduschar_rrx_s
+        .globl  __moduschar_rrf_s
         .globl  __moduschar
 
         ;; __modsuchar
@@ -20,6 +24,8 @@
         ;;           __get_remainder
         ;; notes: build hl as signed-extended dividend, e = divisor,
         ;;        call __div_signexte to divide, then normalize remainder
+__modsuchar_rrx_s::
+__modsuchar_rrf_s::
 __modsuchar:
         ld      e, l                              ; e = divisor (unsigned)
         ld      l, a                              ; l = dividend low
@@ -34,6 +40,8 @@ __modsuchar:
         ;;           __get_remainder
         ;; notes: build hl as sign-extended divisor, de = unsigned dividend,
         ;;        perform signed divide, then normalize remainder
+__moduschar_rrx_s::
+__moduschar_rrf_s::
 __moduschar:
         ld      e, l                              ; e = divisor (signed)
         ld      d, #0                             ; d = 0 (setup de pair)

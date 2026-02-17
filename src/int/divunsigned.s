@@ -14,7 +14,11 @@
 
         .area   _CODE                             ; code segment
 
+        .globl  __divuint_rrx_s
+        .globl  __divuint_rrf_s
         .globl  __divuint                         ; export symbols
+        .globl  __divuchar_rrx_s
+        .globl  __divuchar_rrf_s
         .globl  __divuchar
 
         ;; __divuchar
@@ -22,6 +26,8 @@
         ;; outputs: l = remainder (8-bit), e = quotient (8-bit)
         ;; clobbers: a, d, e, h, l, f; falls into __divu8
         ;; notes: builds hl<-dividend, de<-divisor for 8-bit core
+__divuchar_rrx_s::
+__divuchar_rrf_s::
 __divuchar:
         ld      e, l                              ; e = divisor (orig l)
         ld      l, a                              ; l = dividend (from a)
@@ -36,6 +42,8 @@ __divu8::
         ;; outputs: de = quotient (16-bit), hl = remainder (16-bit), carry=0
         ;; clobbers: a, b, d, e, h, l, f
         ;; notes: chooses fast path when divisor < 2^7, else wide path
+__divuint_rrx_s::
+__divuint_rrf_s::
 __divuint:
         ;; __divu16
 __divu16::

@@ -13,6 +13,8 @@
 
         .area   _CODE
 
+        .globl  __divulong_rrx_s
+        .globl  __divulong_rrf_s
         .globl  __divulong
 
         ;; locals (relative to ix):
@@ -23,6 +25,8 @@
         ;; inputs:  x in DE:HL (DE=low16, HL=high16), y at 4(ix)..7(ix) (lsb..msb)
         ;; outputs: DE:HL = unsigned quotient x / y
         ;; clobbers: af, bc, de, hl, ix
+__divulong_rrx_s::
+__divulong_rrf_s::
 __divulong:
         push    ix
         ld      ix, #0

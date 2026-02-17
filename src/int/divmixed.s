@@ -10,7 +10,11 @@
         .module divmixed                           ; module name
         .optsdcc -mz80 sdcccall(1)
 
+        .globl  __divsuchar_rrx_s
+        .globl  __divsuchar_rrf_s
         .globl  __divsuchar                        ; export symbols
+        .globl  __divuschar_rrx_s
+        .globl  __divuschar_rrf_s
         .globl  __divuschar
 
         ;; __divsuchar
@@ -19,6 +23,8 @@
         ;; clobbers: a, d, e, h, l, f; tail-jumps to __div_signexte
         ;; notes: build hl from dividend (h<-0, l<-a), e<-divisor,
         ;;        then use mixed signed/unsigned divide core
+__divsuchar_rrx_s::
+__divsuchar_rrf_s::
 __divsuchar:
         ld      e, l                              ; e = divisor (unsigned)
         ld      l, a                              ; l = dividend low
@@ -31,6 +37,8 @@ __divsuchar:
         ;; clobbers: a, d, e, h, l, f; tail-jumps to __div16
         ;; notes: e<-divisor, d<-0; sign-extend dividend into h, then
         ;;        use signed 16-bit divide core
+__divuschar_rrx_s::
+__divuschar_rrf_s::
 __divuschar:
         ld      e, l                              ; e = divisor (signed)
         ld      d, #0                             ; d = 0 (high byte of divisor)

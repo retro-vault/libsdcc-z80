@@ -26,9 +26,33 @@ the compiler, and all symbols are resolved by the linker.
 - 100% Z80 assembly (zero C in the runtime)
 - Optimized for speed
 - Supports `int`, `long`, `float`
+- Includes compiler runtime glue used by SDCC code generation
 - Full coverage of arithmetic, comparisons, shifts, and type conversions
 - Docker-based build (no local toolchain required)
 - Comprehensive ZX Spectrum automated tests
+
+## what is included
+
+`libsdcc-z80` is split by compiler feature usage, not just by file type.
+
+- `src/int/`
+  - 8/16/32-bit integer helpers used when C emits runtime calls for:
+    - multiply, divide, modulo
+    - signed/unsigned mixed arithmetic
+    - promotion/widening paths (for example 16x16 -> 32)
+  - Compatibility alias symbols (`*_rrx_s`, `*_rrf_s`) are exported directly from implementation entry points.
+- `src/float/`
+  - IEEE-754 single-precision helpers used for:
+    - `+`, `-`, `*`, `/` on `float`
+    - float comparisons
+    - int/long <-> float conversions
+    - shared float pack/unpack/return helpers
+- `src/runtime/`
+  - SDCC runtime/platform helpers used by non-arithmetic codegen:
+    - indirect calls (`___sdcc_call_hl`, `___sdcc_call_iy`) used by function-pointer calls
+    - frame-entry helper (`___sdcc_enter_ix`) for shared prologue patterns
+    - banked-call helpers (`___sdcc_bcall`, `___sdcc_bcall_ehl`)
+    - critical-section helper symbol (`___sdcc_critical`) for compiler/runtime compatibility
 
 # building
 
@@ -68,7 +92,8 @@ All builds run inside Docker.
 ├── Makefile
 ├── src/
 │   ├── int/
-│   └── float/
+│   ├── float/
+│   └── runtime/
 └── test/
     ├── lib/
     ├── include/
@@ -81,14 +106,15 @@ All builds run inside Docker.
 |--------------------------|-------------|
 | `Makefile`               | Top-level build entry point. Pulls the Docker image and delegates builds to subdirectories. |
 | `src/`                   | `libsdcc-z80` runtime library (Z80 assembly only). |
-| `src/int/`               | Integer arithmetic and helper routines. |
-| `src/float/`             | Floating-point arithmetic and helper routines. |
+| `src/int/`               | Integer helpers (`char`/`int`/`long` mul/div/mod, mixed signed/unsigned paths, widening helpers, legacy aliases). |
+| `src/float/`             | IEEE-754 `float` helpers (arithmetics, comparisons, conversions, shared packing/unpacking routines). |
+| `src/runtime/`           | SDCC runtime glue for indirect calls, frame entry, banked calls, and critical-section symbol compatibility. |
 | `test/`                  | ZX Spectrum test suite and bare-metal SDCC examples. |
 | `test/lib/`              | ZX Spectrum–specific support code and `crt0`. |
 | `test/include/`          | Header files used by tests. |
 | `test/src/`              | Test sources. |
-| `test/src/compile/`      | Compile-only tests (symbol resolution, no binaries produced). |
-| `test/src/execute/`      | Runtime ZX Spectrum tests for integer and floating-point operations. |
+| `test/src/compile/`      | Compile+link-only tests that verify SDCC-generated helper references resolve (no ZX runtime execution). |
+| `test/src/execute/`      | Executed ZX Spectrum TAP tests validating runtime behavior for integer and floating-point operations. |
 
 > **Note**  
 > All builds use the Docker image  

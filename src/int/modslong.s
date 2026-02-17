@@ -17,6 +17,8 @@
 
         .area   _CODE
 
+        .globl  __modslong_rrx_s
+        .globl  __modslong_rrf_s
         .globl  __modslong
 
         ;; locals (relative to ix):
@@ -27,6 +29,8 @@
         ;; inputs:  x in DE:HL (signed), y at 4(ix)..7(ix) (signed, lsb..msb)
         ;; outputs: DE:HL = x % y, sign(remainder)=sign(x)
         ;; clobbers: af, bc, de, hl, ix
+__modslong_rrx_s::
+__modslong_rrf_s::
 __modslong:
         push    ix
         ld      ix, #0
