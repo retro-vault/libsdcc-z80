@@ -60,8 +60,10 @@ ___slong2fs:
         inc     hl
 
 .mag_ok:
-        ;; convert magnitude
+        ;; convert magnitude (___ulong2fs clobbers BC, so save sign first)
+        push    bc
         call    ___ulong2fs
+        pop     bc               ; restore B = sign flag (0x80 or 0x00)
 
         ;; apply sign: set sign bit in top byte of float (H bit7)
         bit     7,b

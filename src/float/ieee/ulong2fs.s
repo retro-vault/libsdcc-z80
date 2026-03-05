@@ -79,8 +79,9 @@ ___ulong2fs::
         ld      h, a                             ; h = byte0
 
         ld      a, b
-        and     #0x7f
-        jr      nc, .no_explsb
+        and     #0x7f                            ; and clears carry - use bit test instead
+        bit     0, d                             ; test LSB of original exponent (D unchanged)
+        jr      z, .no_explsb
         or      #0x80
 .no_explsb:
         ld      l, a                             ; l = byte1

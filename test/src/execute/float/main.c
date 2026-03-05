@@ -1034,6 +1034,57 @@ static int test_f32_divmul_roundtrip(void) {
 
 /* ---------- main ---------- */
 
+
+/* ========================================================================
+ * libcpm3-z80 SDCC bug regression tests
+ * Added to isolate bugs found when running the CP/M 3 C library test suite.
+ * Two categories:
+ *   1. __fsdiv returns wrong result when |a|==|b| at runtime
+ *   2. __ltof fails for runtime-accumulated long values
+ * ======================================================================== */
+
+/* Bug 1a: __fsdiv returns wrong result for 1.0/1.0 at runtime
+ * Expected: 0x3F800000 (1.0)
+ * Observed (SDCC 4.5.0): incorrect bits when dividend==divisor at runtime */
+static int test_fsdiv_one_over_one(void) {
+    const char *name = "fsdiv 1.0/1.0 == 1.0 (runtime)";
+    float a = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
+    float b = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
+    float got = __fsdiv(a, b);
+    if (f32_bits(got) == mk_u32(0x3F800000UL)) { ok(name); return 1; }
+    cputs("FAIL "); cputs(name); cputs(" got=0x"); put_hex32(f32_bits(got)); cputs("\n");
+    return 0;
+}
+
+/* Bug 1b: __fsdiv returns wrong result for -1.0/-1.0 at runtime */
+static int test_fsdiv_neg_over_neg(void) {
+    const char *name = "fsdiv -1.0/-1.0 == 1.0 (runtime)";
+    float a = mk_f32(mk_u32(0xBF800000UL)); /* -1.0 */
+    float b = mk_f32(mk_u32(0xBF800000UL)); /* -1.0 */
+    float got = __fsdiv(a, b);
+    if (f32_bits(got) == mk_u32(0x3F800000UL)) { ok(name); return 1; }
+    cputs("FAIL "); cputs(name); cputs(" got=0x"); put_hex32(f32_bits(got)); cputs("\n");
+    return 0;
+}
+
+/* Bug 2: __ltof fails for runtime-accumulated long
+ * Loop accumulates 1L 100 times; (float) cast should yield 100.0f = 0x42C80000
+ * Observed (SDCC 4.5.0): cast of runtime long gives wrong float bits */
+static int test_ltof_runtime_long(void) {
+    const char *name = "ltof (float)(acc of 100x 1L) == 100.0";
+    long acc = 0;
+    uint8_t i;
+    for (i = 0; i < 100; i++)
+        acc += mk_s32(1L);  /* volatile barrier prevents constant folding */
+    float r = (float)acc;
+    uint32_t got = f32_bits(r);
+    /* 100.0f = 0x42C80000 */
+    if (got == mk_u32(0x42C80000UL)) { ok(name); return 1; }
+    cputs("FAIL "); cputs(name); cputs(" got=0x"); put_hex32(got); cputs("\n");
+    return 0;
+}
+
+
 void main(void){
     cinit();
     cclear();
@@ -1152,6 +1203,11 @@ void main(void){
     total++; passed += test_f32_div_large_small();
     total++; passed += test_f32_muldiv_roundtrip();
     total++; passed += test_f32_divmul_roundtrip();
+
+    /* --- SDCC bug regression tests --- */
+    total++; passed += test_fsdiv_one_over_one();
+    total++; passed += test_fsdiv_neg_over_neg();
+    total++; passed += test_ltof_runtime_long();
 
 #if(_DEBUG)
     dump_fdebug();
