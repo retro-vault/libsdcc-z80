@@ -23,19 +23,32 @@ static void put_hex32(uint32_t v) {
     put_hex16((uint16_t)(v & 0xFFFF)); // low word
 }
 
+static void put_dec16(int16_t v) {
+    char buf[7];
+    uint8_t i = 0, j;
+    uint8_t neg = 0;
+    int16_t n = v;
+    if (n < 0) { neg = 1; n = -n; }
+    if (n == 0) { buf[i++] = '0'; }
+    else { while (n > 0) { buf[i++] = '0' + (n % 10); n /= 10; } }
+    if (neg) buf[i++] = '-';
+    { volatile uint8_t half = (uint8_t)(i >> 1); for (j = 0; j < half; j++) { char t=buf[j]; buf[j]=buf[i-1-j]; buf[i-1-j]=t; } }
+    buf[i] = 0;
+    cputs(buf);
+}
 
 /* status lines */
 static void ok  (const char *name){ cputs("ok  ");  cputs(name); cputs("\n"); }
 static void fail(const char *name){ cputs("FAIL "); cputs(name); cputs("\n"); }
 
-/* ---------- “make value non-constant” helpers (C89/SDCC-safe) ---------- */
+/* ---------- "make value non-constant" helpers (C89/SDCC-safe) ---------- */
 
 static uint8_t  mk_u8 (uint8_t  x){ volatile uint8_t  t=x; return t; }
 static  int8_t  mk_s8 ( int8_t  x){ volatile  int8_t  t=x; return t; }
 static uint16_t mk_u16(uint16_t x){ volatile uint16_t t=x; return t; }
 static  int16_t mk_s16( int16_t x){ volatile  int16_t t=x; return t; }
 static uint32_t mk_u32(uint32_t x){ volatile uint32_t t=x; return t; }
-/* SDCC “long” is 32-bit; keep both typedefs for clarity */
+/* SDCC "long" is 32-bit; keep both typedefs for clarity */
 static  int32_t mk_s32( int32_t x){ volatile  int32_t t=x; return t; }
 
 /* ---------- f32 bit-cast helpers (no printf, compare by bits) ---------- */
@@ -60,7 +73,7 @@ static uint32_t f32_bits(float x) {
 #define _DEBUG 0
 
 #if(_DEBUG)
-/* ---------- debugging ---------- */ 
+/* ---------- debugging ---------- */
 extern volatile uint8_t  fdebug_b1, fdebug_b2, fdebug_b3, fdebug_b4;
 extern volatile uint16_t fdebug_w1, fdebug_w2, fdebug_w3, fdebug_w4;
 
@@ -587,7 +600,6 @@ static int test_f32_cmp_same_exp_mant_pos1(void) {
     fail(name); return 0;
 }
 
-// Test negative numbers
 static int test_f32_cmp_neg_vs_pos(void) {
     const char *name = "fscmp -1.25 vs 1.25 == -1";
     float a = mk_f32(mk_u32(0xBFA00000UL)); /* -1.25 */
@@ -615,7 +627,6 @@ static int test_f32_cmp_neg_equal(void) {
     fail(name); return 0;
 }
 
-// Test zero
 static int test_f32_cmp_zero_vs_pos(void) {
     const char *name = "fscmp 0.0 vs 1.25 == -1";
     float a = mk_f32(mk_u32(0x00000000UL)); /* +0.0 */
@@ -643,7 +654,6 @@ static int test_f32_cmp_neg_zero_vs_pos_zero(void) {
     fail(name); return 0;
 }
 
-// Test very small numbers (denormals)
 static int test_f32_cmp_denorm_vs_zero(void) {
     const char *name = "fscmp denormal vs 0.0 == 0 (denorms treated as 0)";
     float a = mk_f32(mk_u32(0x00000001UL)); /* smallest denormal */
@@ -653,7 +663,6 @@ static int test_f32_cmp_denorm_vs_zero(void) {
     fail(name); return 0;
 }
 
-// Test edge case: mantissa comparison in lower bytes
 static int test_f32_cmp_mant_lowbyte(void) {
     const char *name = "fscmp mantissa differs only in low byte";
     float a = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
@@ -663,7 +672,6 @@ static int test_f32_cmp_mant_lowbyte(void) {
     fail(name); return 0;
 }
 
-// Test large exponent differences
 static int test_f32_cmp_large_vs_small(void) {
     const char *name = "fscmp 1000000.0 vs 0.000001";
     float a = mk_f32(mk_u32(0x49742400UL)); /* 1000000.0 */
@@ -674,7 +682,6 @@ static int test_f32_cmp_large_vs_small(void) {
 }
 
 /* ---------- MUL ---------- */
-// Basic multiplication tests
 static int test_f32_mul_basic_1(void) {
     const char *name = "fsmul 2.0 * 3.0 == 6.0";
     float a = mk_f32(mk_u32(0x40000000UL)); /* 2.0 */
@@ -695,7 +702,6 @@ static int test_f32_mul_basic_2(void) {
     fail(name); return 0;
 }
 
-// Multiply by 1.0 (identity)
 static int test_f32_mul_identity(void) {
     const char *name = "fsmul 5.25 * 1.0 == 5.25";
     float a = mk_f32(mk_u32(0x40A80000UL)); /* 5.25 */
@@ -706,7 +712,6 @@ static int test_f32_mul_identity(void) {
     fail(name); return 0;
 }
 
-// Multiply by 0
 static int test_f32_mul_by_zero(void) {
     const char *name = "fsmul 5.25 * 0.0 == 0.0";
     float a = mk_f32(mk_u32(0x40A80000UL)); /* 5.25 */
@@ -717,7 +722,6 @@ static int test_f32_mul_by_zero(void) {
     fail(name); return 0;
 }
 
-// Negative numbers
 static int test_f32_mul_neg_pos(void) {
     const char *name = "fsmul -2.0 * 3.0 == -6.0";
     float a = mk_f32(mk_u32(0xC0000000UL)); /* -2.0 */
@@ -738,7 +742,6 @@ static int test_f32_mul_neg_neg(void) {
     fail(name); return 0;
 }
 
-// Fractional results
 static int test_f32_mul_fraction(void) {
     const char *name = "fsmul 0.5 * 0.5 == 0.25";
     float a = mk_f32(mk_u32(0x3F000000UL)); /* 0.5 */
@@ -749,7 +752,6 @@ static int test_f32_mul_fraction(void) {
     fail(name); return 0;
 }
 
-// Small numbers
 static int test_f32_mul_small(void) {
     const char *name = "fsmul 0.1 * 0.1 == 0.01";
     float a = mk_f32(mk_u32(0x3DCCCCCDul)); /* ~0.1 */
@@ -760,7 +762,6 @@ static int test_f32_mul_small(void) {
     fail(name); return 0;
 }
 
-// Large numbers
 static int test_f32_mul_large(void) {
     const char *name = "fsmul 1000.0 * 1000.0 == 1000000.0";
     float a = mk_f32(mk_u32(0x447A0000UL)); /* 1000.0 */
@@ -771,7 +772,6 @@ static int test_f32_mul_large(void) {
     fail(name); return 0;
 }
 
-// Powers of 2 (should be exact)
 static int test_f32_mul_pow2(void) {
     const char *name = "fsmul 4.0 * 8.0 == 32.0";
     float a = mk_f32(mk_u32(0x40800000UL)); /* 4.0 */
@@ -782,12 +782,7 @@ static int test_f32_mul_pow2(void) {
     fail(name); return 0;
 }
 
-/* ---------- div ---------- */
-// ============================================================
-// fsdiv tests
-// ============================================================
-
-// Basic division: 6.0 / 3.0 == 2.0
+/* ---------- DIV ---------- */
 static int test_f32_div_basic_1(void) {
     const char *name = "fsdiv 6.0 / 3.0 == 2.0";
     float a = mk_f32(mk_u32(0x40C00000UL)); /* 6.0 */
@@ -798,7 +793,6 @@ static int test_f32_div_basic_1(void) {
     fail(name); return 0;
 }
 
-// Division: 1.0 / 2.0 == 0.5
 static int test_f32_div_half(void) {
     const char *name = "fsdiv 1.0 / 2.0 == 0.5";
     float a = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
@@ -809,7 +803,6 @@ static int test_f32_div_half(void) {
     fail(name); return 0;
 }
 
-// Division: 10.0 / 5.0 == 2.0
 static int test_f32_div_10_by_5(void) {
     const char *name = "fsdiv 10.0 / 5.0 == 2.0";
     float a = mk_f32(mk_u32(0x41200000UL)); /* 10.0 */
@@ -820,7 +813,6 @@ static int test_f32_div_10_by_5(void) {
     fail(name); return 0;
 }
 
-// Powers of 2: 32.0 / 8.0 == 4.0
 static int test_f32_div_pow2(void) {
     const char *name = "fsdiv 32.0 / 8.0 == 4.0";
     float a = mk_f32(mk_u32(0x42000000UL)); /* 32.0 */
@@ -831,7 +823,6 @@ static int test_f32_div_pow2(void) {
     fail(name); return 0;
 }
 
-// Identity: 7.0 / 1.0 == 7.0
 static int test_f32_div_by_one(void) {
     const char *name = "fsdiv 7.0 / 1.0 == 7.0";
     float a = mk_f32(mk_u32(0x40E00000UL)); /* 7.0 */
@@ -842,10 +833,6 @@ static int test_f32_div_by_one(void) {
     fail(name); return 0;
 }
 
-// Self-division: 123.456 / 123.456 == 1.0
-// 123.456 = 0x42F6E979 (approximate, but exact bit pattern)
-// Actually 123.45600128173828125
-// We test that dividing by itself gives 1.0
 static int test_f32_div_self(void) {
     const char *name = "fsdiv x / x == 1.0";
     float a = mk_f32(mk_u32(0x42F6E979UL)); /* ~123.456 */
@@ -856,7 +843,6 @@ static int test_f32_div_self(void) {
     fail(name); return 0;
 }
 
-// Negative: -6.0 / 3.0 == -2.0
 static int test_f32_div_neg(void) {
     const char *name = "fsdiv -6.0 / 3.0 == -2.0";
     float a = mk_f32(mk_u32(0xC0C00000UL)); /* -6.0 */
@@ -867,7 +853,6 @@ static int test_f32_div_neg(void) {
     fail(name); return 0;
 }
 
-// Small result: 1.0 / 256.0 == 0.00390625
 static int test_f32_div_small(void) {
     const char *name = "fsdiv 1.0 / 256.0 == 0.00390625";
     float a = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
@@ -878,7 +863,6 @@ static int test_f32_div_small(void) {
     fail(name); return 0;
 }
 
-// Large: 1000000.0 / 1000.0 == 1000.0
 static int test_f32_div_large(void) {
     const char *name = "fsdiv 1000000.0 / 1000.0 == 1000.0";
     float a = mk_f32(mk_u32(0x49742400UL)); /* 1000000.0 */
@@ -889,7 +873,6 @@ static int test_f32_div_large(void) {
     fail(name); return 0;
 }
 
-// Zero numerator: 0.0 / 5.0 == 0.0
 static int test_f32_div_zero_num(void) {
     const char *name = "fsdiv 0.0 / 5.0 == 0.0";
     float a = mk_f32(mk_u32(0x00000000UL)); /* 0.0 */
@@ -901,9 +884,6 @@ static int test_f32_div_zero_num(void) {
 }
 
 /* ---------- additional MUL tests ---------- */
-
-// Multiply two numbers where mantissa product has bit47=0 (no-shift path)
-// 1.5 * 1.25 = 1.875 (both mantissas close to 1.0)
 static int test_f32_mul_noshift(void) {
     const char *name = "fsmul 1.5 * 1.25 == 1.875";
     float a = mk_f32(mk_u32(0x3FC00000UL)); /* 1.5 */
@@ -913,7 +893,6 @@ static int test_f32_mul_noshift(void) {
     fail(name); return 0;
 }
 
-// Very small * very large = normal
 static int test_f32_mul_small_large(void) {
     const char *name = "fsmul 0.00390625 * 256.0 == 1.0";
     float a = mk_f32(mk_u32(0x3B800000UL)); /* 2^-8 */
@@ -923,7 +902,6 @@ static int test_f32_mul_small_large(void) {
     fail(name); return 0;
 }
 
-// Commutative: a*b == b*a
 static int test_f32_mul_commutative(void) {
     const char *name = "fsmul 7.0 * 3.0 == 3.0 * 7.0";
     float a = mk_f32(mk_u32(0x40E00000UL)); /* 7.0 */
@@ -934,7 +912,6 @@ static int test_f32_mul_commutative(void) {
     fail(name); return 0;
 }
 
-// Multiply negative by zero
 static int test_f32_mul_neg_by_zero(void) {
     const char *name = "fsmul -5.0 * 0.0 == 0.0";
     float a = mk_f32(mk_u32(0xC0A00000UL)); /* -5.0 */
@@ -944,7 +921,6 @@ static int test_f32_mul_neg_by_zero(void) {
     fail(name); return 0;
 }
 
-// Square: 16.0 * 16.0 == 256.0
 static int test_f32_mul_square(void) {
     const char *name = "fsmul 16.0 * 16.0 == 256.0";
     float a = mk_f32(mk_u32(0x41800000UL)); /* 16.0 */
@@ -955,8 +931,6 @@ static int test_f32_mul_square(void) {
 }
 
 /* ---------- additional DIV tests ---------- */
-
-// Negative / negative = positive
 static int test_f32_div_neg_neg(void) {
     const char *name = "fsdiv -6.0 / -3.0 == 2.0";
     float a = mk_f32(mk_u32(0xC0C00000UL)); /* -6.0 */
@@ -966,22 +940,18 @@ static int test_f32_div_neg_neg(void) {
     fail(name); return 0;
 }
 
-// Result < 1: 3.0 / 7.0 (non-terminating binary fraction)
-// 3/7 truncated = 0x3EDB6DB6
 static int test_f32_div_frac_result(void) {
     const char *name = "fsdiv 3.0 / 7.0 == ~0.42857143";
     float a = mk_f32(mk_u32(0x40400000UL)); /* 3.0 */
     float b = mk_f32(mk_u32(0x40E00000UL)); /* 7.0 */
     float got = __fsdiv(a, b);
     uint32_t gbits = f32_bits(got);
-    /* Accept 0x3EDB6DB6 (truncation) or 0x3EDB6DB7 (round nearest) */
     if (gbits == mk_u32(0x3EDB6DB6UL) || gbits == mk_u32(0x3EDB6DB7UL)) { ok(name); return 1; }
     fail(name);
     cputs("  got: "); put_hex32(gbits); cputs("\n");
     return 0;
 }
 
-// Inverse: 1.0 / 0.5 == 2.0
 static int test_f32_div_by_half(void) {
     const char *name = "fsdiv 1.0 / 0.5 == 2.0";
     float a = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
@@ -991,7 +961,6 @@ static int test_f32_div_by_half(void) {
     fail(name); return 0;
 }
 
-// Large / small = very large
 static int test_f32_div_large_small(void) {
     const char *name = "fsdiv 65536.0 / 0.0625 == 1048576.0";
     float a = mk_f32(mk_u32(0x47800000UL)); /* 65536.0 */
@@ -1001,7 +970,6 @@ static int test_f32_div_large_small(void) {
     fail(name); return 0;
 }
 
-// Consistency: (a * b) / b == a
 static int test_f32_muldiv_roundtrip(void) {
     const char *name = "fsdiv (4.0*8.0)/8.0 == 4.0";
     float a = mk_f32(mk_u32(0x40800000UL)); /* 4.0 */
@@ -1014,7 +982,6 @@ static int test_f32_muldiv_roundtrip(void) {
     return 0;
 }
 
-// Consistency: a / b * b == a (for exact values)
 static int test_f32_divmul_roundtrip(void) {
     const char *name = "fsmul (32.0/8.0)*8.0 == 32.0";
     float a = mk_f32(mk_u32(0x42000000UL)); /* 32.0 */
@@ -1027,63 +994,218 @@ static int test_f32_divmul_roundtrip(void) {
     return 0;
 }
 
-/* --- main additions ---
+/* =========================================================================
+ * Bug A: __sitof diagnostic — (float)(int) wrong for most non-zero ints
+ *
+ * sitof_check() casts a volatile int16_t and compares bits.
+ * On failure it prints:  n=<decimal>  exp=0x<bits>  got=0x<bits>
+ * This lets you see exactly which values fail and what bits come out,
+ * pointing to the broken shift/normalise path in __sitof.
+ * ========================================================================= */
 
-*/
+static uint8_t sitof_check(int16_t n, uint32_t exp) {
+    volatile int16_t v = n;
+    uint32_t got = f32_bits((float)v);
+    if (got == mk_u32(exp)) return 1;
+    cputs("  n="); put_dec16(n);
+    cputs(" exp=0x"); put_hex32(mk_u32(exp));
+    cputs(" got=0x"); put_hex32(got); cputs("\n");
+    return 0;
+}
 
+/* Positive powers of 2: each tests one normalisation shift distance */
+static int test_sitof_pos_pow2(void) {
+    const char *name = "sitof positive powers of 2 (1..16384)";
+    uint8_t ok_flag = 1;
+    ok_flag &= sitof_check(    1, 0x3F800000UL); /* exponent=127, shift 0  */
+    ok_flag &= sitof_check(    2, 0x40000000UL); /* exponent=128, shift 1  */
+    ok_flag &= sitof_check(    4, 0x40800000UL); /* exponent=129, shift 2  */
+    ok_flag &= sitof_check(    8, 0x41000000UL); /* exponent=130, shift 3  */
+    ok_flag &= sitof_check(   16, 0x41800000UL); /* exponent=131, shift 4  */
+    ok_flag &= sitof_check(   32, 0x42000000UL); /* exponent=132, shift 5  */
+    ok_flag &= sitof_check(   64, 0x42800000UL); /* exponent=133, shift 6  */
+    ok_flag &= sitof_check(  128, 0x43000000UL); /* exponent=134, shift 7  */
+    ok_flag &= sitof_check(  256, 0x43800000UL); /* exponent=135, shift 8  */
+    ok_flag &= sitof_check(  512, 0x44000000UL); /* exponent=136, shift 9  */
+    ok_flag &= sitof_check( 1024, 0x44800000UL); /* exponent=137, shift 10 */
+    ok_flag &= sitof_check( 2048, 0x45000000UL); /* exponent=138, shift 11 */
+    ok_flag &= sitof_check( 4096, 0x45800000UL); /* exponent=139, shift 12 */
+    ok_flag &= sitof_check( 8192, 0x46000000UL); /* exponent=140, shift 13 */
+    ok_flag &= sitof_check(16384, 0x46800000UL); /* exponent=141, shift 14 */
+    if (ok_flag) { ok(name); return 1; }
+    fail(name); return 0;
+}
 
-/* ---------- main ---------- */
+/* Non-power-of-2: exercises mantissa bits, split across both bytes */
+static int test_sitof_mixed(void) {
+    const char *name = "sitof mixed values (low-byte only vs both bytes)";
+    uint8_t ok_flag = 1;
+    /* value fits in low byte (MSB == 0x00) */
+    ok_flag &= sitof_check(  3, 0x40400000UL);
+    ok_flag &= sitof_check(  5, 0x40A00000UL);
+    ok_flag &= sitof_check(  7, 0x40E00000UL);
+    ok_flag &= sitof_check( 10, 0x41200000UL);
+    ok_flag &= sitof_check( 15, 0x41700000UL);
+    ok_flag &= sitof_check(100, 0x42C80000UL);
+    ok_flag &= sitof_check(127, 0x42FE0000UL);
+    ok_flag &= sitof_check(200, 0x43480000UL);
+    ok_flag &= sitof_check(255, 0x437F0000UL);
+    /* value spans both bytes (MSB != 0x00) */
+    ok_flag &= sitof_check( 257, 0x43808000UL);
+    ok_flag &= sitof_check( 300, 0x43960000UL);
+    ok_flag &= sitof_check(1000, 0x447A0000UL);
+    ok_flag &= sitof_check(1023, 0x447FC000UL);
+    ok_flag &= sitof_check(32767,0x46FFFE00UL);
+    if (ok_flag) { ok(name); return 1; }
+    fail(name); return 0;
+}
 
+/* Negative values: exercises sign handling + normalisation */
+static int test_sitof_negative(void) {
+    const char *name = "sitof negative values";
+    uint8_t ok_flag = 1;
+    ok_flag &= sitof_check(   -1, 0xBF800000UL);
+    ok_flag &= sitof_check(   -2, 0xC0000000UL);
+    ok_flag &= sitof_check(   -4, 0xC0800000UL);
+    ok_flag &= sitof_check(   -8, 0xC1000000UL);
+    ok_flag &= sitof_check( -100, 0xC2C80000UL);
+    ok_flag &= sitof_check( -128, 0xC3000000UL);
+    ok_flag &= sitof_check( -255, 0xC37F0000UL);
+    ok_flag &= sitof_check( -256, 0xC3800000UL);
+    ok_flag &= sitof_check(-1000, 0xC47A0000UL);
+    ok_flag &= sitof_check(-32768,0xC7000000UL);
+    if (ok_flag) { ok(name); return 1; }
+    fail(name); return 0;
+}
 
-/* ========================================================================
- * libcpm3-z80 SDCC bug regression tests
- * Added to isolate bugs found when running the CP/M 3 C library test suite.
- * Two categories:
- *   1. __fsdiv returns wrong result when |a|==|b| at runtime
- *   2. __ltof fails for runtime-accumulated long values
- * ======================================================================== */
+/* =========================================================================
+ * Bug B: __fsdiv x/x diagnostic
+ *
+ * Two sub-cases to distinguish aliasing from value issues:
+ *   same_var:  float x = mk_f32(...); __fsdiv(x, x)   <- the failing case
+ *   two_vars:  float a = mk_f32(...); float b = mk_f32(...); __fsdiv(a, b)
+ *
+ * The bit dump always runs and prints what __fsdiv(x,x) actually returns,
+ * giving enough info to find the corrupted intermediate in the asm.
+ * ========================================================================= */
 
-/* Bug 1a: __fsdiv returns wrong result for 1.0/1.0 at runtime
- * Expected: 0x3F800000 (1.0)
- * Observed (SDCC 4.5.0): incorrect bits when dividend==divisor at runtime */
+static uint8_t fsdiv_self_check(uint32_t bits) {
+    float x = mk_f32(bits);
+    float got = __fsdiv(x, x);
+    uint32_t got_bits = f32_bits(got);
+    if (got_bits == mk_u32(0x3F800000UL)) return 1;
+    cputs("  x=0x"); put_hex32(bits);
+    cputs(" -> 0x"); put_hex32(got_bits); cputs(" (exp 3F800000)\n");
+    return 0;
+}
+
+static uint8_t fsdiv_twovar_check(uint32_t bits) {
+    float a = mk_f32(bits);
+    float b = mk_f32(bits);
+    float got = __fsdiv(a, b);
+    uint32_t got_bits = f32_bits(got);
+    if (got_bits == mk_u32(0x3F800000UL)) return 1;
+    cputs("  x=0x"); put_hex32(bits);
+    cputs(" -> 0x"); put_hex32(got_bits); cputs(" (exp 3F800000)\n");
+    return 0;
+}
+
+/* __fsdiv(x, x) — same variable for both args */
+static int test_fsdiv_same_var(void) {
+    const char *name = "fsdiv x/x same variable";
+    uint8_t ok_flag = 1;
+    ok_flag &= fsdiv_self_check(0x3F800000UL); /*  1.0 */
+    ok_flag &= fsdiv_self_check(0xBF800000UL); /* -1.0 */
+    ok_flag &= fsdiv_self_check(0x40000000UL); /*  2.0 */
+    ok_flag &= fsdiv_self_check(0xC0000000UL); /* -2.0 */
+    ok_flag &= fsdiv_self_check(0x3F000000UL); /*  0.5 */
+    ok_flag &= fsdiv_self_check(0x42C80000UL); /*  100.0 */
+    ok_flag &= fsdiv_self_check(0x447A0000UL); /*  1000.0 */
+    ok_flag &= fsdiv_self_check(0x42F6E979UL); /* ~123.456 */
+    if (ok_flag) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+/* __fsdiv(a, b) — two separate variables, equal value (baseline) */
+static int test_fsdiv_two_vars(void) {
+    const char *name = "fsdiv a/b two vars equal value";
+    uint8_t ok_flag = 1;
+    ok_flag &= fsdiv_twovar_check(0x3F800000UL); /*  1.0 */
+    ok_flag &= fsdiv_twovar_check(0xBF800000UL); /* -1.0 */
+    ok_flag &= fsdiv_twovar_check(0x40000000UL); /*  2.0 */
+    ok_flag &= fsdiv_twovar_check(0xC0000000UL); /* -2.0 */
+    ok_flag &= fsdiv_twovar_check(0x3F000000UL); /*  0.5 */
+    ok_flag &= fsdiv_twovar_check(0x42C80000UL); /*  100.0 */
+    ok_flag &= fsdiv_twovar_check(0x447A0000UL); /*  1000.0 */
+    ok_flag &= fsdiv_twovar_check(0x42F6E979UL); /* ~123.456 */
+    if (ok_flag) { ok(name); return 1; }
+    fail(name); return 0;
+}
+
+/* Always passes — prints what __fsdiv(x,x) actually returns per value */
+static int test_fsdiv_same_var_dump(void) {
+    const char *name = "fsdiv x/x bit dump (informational)";
+    uint32_t cases[] = {
+        0x3F800000UL,  /*  1.0 */
+        0xBF800000UL,  /* -1.0 */
+        0x40000000UL,  /*  2.0 */
+        0x40400000UL,  /*  3.0 */
+        0x40800000UL,  /*  4.0 */
+        0x41000000UL,  /*  8.0 */
+        0x3F000000UL,  /*  0.5 */
+        0x3E800000UL,  /*  0.25 */
+        0x42C80000UL,  /*  100.0 */
+        0x447A0000UL,  /*  1000.0 */
+    };
+    uint8_t i;
+    for (i = 0; i < 10; i++) {
+        float x = mk_f32(cases[i]);
+        uint32_t got = f32_bits(__fsdiv(x, x));
+        cputs("  0x"); put_hex32(cases[i]);
+        cputs("/same -> 0x"); put_hex32(got);
+        cputs(got == mk_u32(0x3F800000UL) ? " ok\n" : " WRONG\n");
+    }
+    ok(name); return 1;
+}
+
+/* =========================================================================
+ * Previous bug regression tests (from libcpm3-z80 session)
+ * ========================================================================= */
+
 static int test_fsdiv_one_over_one(void) {
-    const char *name = "fsdiv 1.0/1.0 == 1.0 (runtime)";
-    float a = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
-    float b = mk_f32(mk_u32(0x3F800000UL)); /* 1.0 */
+    const char *name = "fsdiv 1.0/1.0 == 1.0 (two vars)";
+    float a = mk_f32(mk_u32(0x3F800000UL));
+    float b = mk_f32(mk_u32(0x3F800000UL));
     float got = __fsdiv(a, b);
     if (f32_bits(got) == mk_u32(0x3F800000UL)) { ok(name); return 1; }
     cputs("FAIL "); cputs(name); cputs(" got=0x"); put_hex32(f32_bits(got)); cputs("\n");
     return 0;
 }
 
-/* Bug 1b: __fsdiv returns wrong result for -1.0/-1.0 at runtime */
 static int test_fsdiv_neg_over_neg(void) {
-    const char *name = "fsdiv -1.0/-1.0 == 1.0 (runtime)";
-    float a = mk_f32(mk_u32(0xBF800000UL)); /* -1.0 */
-    float b = mk_f32(mk_u32(0xBF800000UL)); /* -1.0 */
+    const char *name = "fsdiv -1.0/-1.0 == 1.0 (two vars)";
+    float a = mk_f32(mk_u32(0xBF800000UL));
+    float b = mk_f32(mk_u32(0xBF800000UL));
     float got = __fsdiv(a, b);
     if (f32_bits(got) == mk_u32(0x3F800000UL)) { ok(name); return 1; }
     cputs("FAIL "); cputs(name); cputs(" got=0x"); put_hex32(f32_bits(got)); cputs("\n");
     return 0;
 }
 
-/* Bug 2: __ltof fails for runtime-accumulated long
- * Loop accumulates 1L 100 times; (float) cast should yield 100.0f = 0x42C80000
- * Observed (SDCC 4.5.0): cast of runtime long gives wrong float bits */
 static int test_ltof_runtime_long(void) {
     const char *name = "ltof (float)(acc of 100x 1L) == 100.0";
     long acc = 0;
     uint8_t i;
     for (i = 0; i < 100; i++)
-        acc += mk_s32(1L);  /* volatile barrier prevents constant folding */
+        acc += mk_s32(1L);
     float r = (float)acc;
     uint32_t got = f32_bits(r);
-    /* 100.0f = 0x42C80000 */
     if (got == mk_u32(0x42C80000UL)) { ok(name); return 1; }
     cputs("FAIL "); cputs(name); cputs(" got=0x"); put_hex32(got); cputs("\n");
     return 0;
 }
 
+/* ---------- main -------------------------------------------------------- */
 
 void main(void){
     cinit();
@@ -1114,7 +1236,7 @@ void main(void){
     total++; passed += test_fs2slong_trunc_neg();
     total++; passed += test_fs2slong_clamp_pos();
     total++; passed += test_fs2slong_clamp_neg();
-    total++; passed += test_fs2slong_word_order_sentinel();  
+    total++; passed += test_fs2slong_word_order_sentinel();
     total++; passed += test_fs2ulong_trunc_pos();
     total++; passed += test_fs2ulong_neg_zero();
     total++; passed += test_fs2ulong_clamp_2p32();
@@ -1144,9 +1266,6 @@ void main(void){
     total++; passed += test_slong2fs_max_rounds_to_2p31();
     total++; passed += test_f32_cmp_basic_neg1();
     total++; passed += test_f32_cmp_basic_zero();
-    total++; passed += test_f32_cmp_basic_pos1();
-    total++; passed += test_f32_cmp_same_exp_mant_pos1();
-    total++; passed += test_f32_cmp_same_exp_mant_neg1();
     total++; passed += test_f32_cmp_basic_pos1();
     total++; passed += test_f32_cmp_same_exp_mant_pos1();
     total++; passed += test_f32_cmp_same_exp_mant_neg1();
@@ -1190,21 +1309,23 @@ void main(void){
     total++; passed += test_f32_mul_neg_by_zero();
     total++; passed += test_f32_mul_square();
     total++; passed += test_f32_div_neg_neg();
-    total++; passed += test_f32_div_by_half();
-    total++; passed += test_f32_div_large_small();
-    total++; passed += test_f32_mul_noshift();
-    total++; passed += test_f32_mul_small_large();
-    total++; passed += test_f32_mul_commutative();
-    total++; passed += test_f32_mul_neg_by_zero();
-    total++; passed += test_f32_mul_square();
-    total++; passed += test_f32_div_neg_neg();
     total++; passed += test_f32_div_frac_result();
     total++; passed += test_f32_div_by_half();
     total++; passed += test_f32_div_large_small();
     total++; passed += test_f32_muldiv_roundtrip();
     total++; passed += test_f32_divmul_roundtrip();
 
-    /* --- SDCC bug regression tests --- */
+    /* --- Bug A: __sitof (int->float) diagnostic --- */
+    total++; passed += test_sitof_pos_pow2();
+    total++; passed += test_sitof_mixed();
+    total++; passed += test_sitof_negative();
+
+    /* --- Bug B: __fsdiv x/x diagnostic --- */
+    total++; passed += test_fsdiv_same_var();
+    total++; passed += test_fsdiv_two_vars();
+    total++; passed += test_fsdiv_same_var_dump(); /* informational, always passes */
+
+    /* --- previous regression tests --- */
     total++; passed += test_fsdiv_one_over_one();
     total++; passed += test_fsdiv_neg_over_neg();
     total++; passed += test_ltof_runtime_long();

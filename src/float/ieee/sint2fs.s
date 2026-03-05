@@ -48,8 +48,10 @@ ___sint2fs:
         inc     hl
 
 .mag_ok:
-        ;; convert magnitude
+        ;; convert magnitude; push B (sign) because ___uint2fs clobbers BC
+        push    bc
         call    ___uint2fs
+        pop     bc
 
         ;; apply sign to float: set sign bit in highest byte (H bit7)
         bit     7,b

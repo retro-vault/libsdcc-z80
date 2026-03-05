@@ -48,12 +48,11 @@ ___uint2fs:
         srl     a               ;; A = exp>>1, carry = exp&1
         ld      b,a             ;; B = first byte
 
-        ld      a,h
-        and     #0x7F
-        jr      nc, .no_exp_lsb
-        or      #0x80
-.no_exp_lsb:
-        ld      c,a             ;; C = second byte
+        ld      a,h             ;; A = normalized H (bit7 always 1); ld preserves carry
+        jr      c, .exp_odd     ;; exp was odd: H's bit7 IS the exp LSB (already 1) — keep as-is
+        and     #0x7F           ;; exp was even: exp LSB is 0, clear bit7 (implicit leading 1)
+.exp_odd:
+        ld      c,a             ;; C = second byte = ((exp&1)<<7) | (H & 0x7F)
 
         ;; mantissa low 16 bits = (L << 8)
         ;; low word bytes: [L][0]
