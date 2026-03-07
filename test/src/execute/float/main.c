@@ -2,7 +2,7 @@
 // (c) 2025 tomaz stih
 
 #include <stdint.h>
-#include <zx/spectrum.h>
+#include <io.h>
 
 /* ---------- tiny print helpers ---------- */
 
@@ -1678,7 +1678,7 @@ void main(void){
 
     int passed=0, total=0;
 
-    cputs("ZX float helper suite\n");
+    cputs("float helper suite\n");
 
     total++; passed += test_f32_add_basic();
     total++; passed += test_f32_sub_basic();

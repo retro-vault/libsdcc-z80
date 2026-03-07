@@ -2,7 +2,7 @@
 // (c) 2025 tomaz stih
 
 #include <stdint.h>
-#include <zx/spectrum.h>
+#include <io.h>
 
 
 /* ---------- tiny print helpers ---------- */
@@ -664,7 +664,7 @@ void main(void){
 
     int passed=0, total=0;
 
-    cputs("ZX int helper suite\n");
+    cputs("int helper suite\n");
 
     total++; passed += test_u8_wrap_add();
     total++; passed += test_s8_cmp();

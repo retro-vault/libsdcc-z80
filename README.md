@@ -29,7 +29,7 @@ the compiler, and all symbols are resolved by the linker.
 - Includes compiler runtime glue used by SDCC code generation
 - Full coverage of arithmetic, comparisons, shifts, and type conversions
 - Docker-based build (no local toolchain required)
-- Comprehensive ZX Spectrum automated tests
+- Automated CP/M test suite running under [RunCPM](https://github.com/MockbaTheBorg/RunCPM)
 
 ## what is included
 
@@ -61,7 +61,7 @@ the compiler, and all symbols are resolved by the linker.
 The project is built using `make` and runs entirely inside Docker. No local SDCC installation is required.
 
 ~~~sh
-make          # build library and tests
+make          # build library only
 make lib      # build library only
 make clean
 ~~~
@@ -74,7 +74,7 @@ To integrate the build into another project, override the output directories usi
 make BUILD_DIR=obj BIN_DIR=output
 ~~~
 
-> **Note**  
+> **Note**
 > When custom output directories are used, the same variables must also be
 > provided when cleaning:
 >
@@ -82,10 +82,26 @@ make BUILD_DIR=obj BIN_DIR=output
 > make BUILD_DIR=obj BIN_DIR=output clean
 > ~~~
 
-## directory structure
+## running tests
 
-The project is split into a small runtime library and a ZX Spectrum–based test suite.  
-All builds run inside Docker.
+Tests compile to CP/M `.COM` binaries and run under
+[RunCPM](https://github.com/MockbaTheBorg/RunCPM) inside Docker.
+A single command builds the test image, compiles all tests, runs them, and
+writes results to `bin/itest.txt` and `bin/ftest.txt`:
+
+~~~sh
+make run-tests
+~~~
+
+Additional test targets:
+
+~~~sh
+make docker-test-build    # build the RunCPM Docker image (done automatically by run-tests)
+make docker-test-rebuild  # force-rebuild the RunCPM image without cache
+make cpm-tests            # compile .COM binaries without running them
+~~~
+
+## directory structure
 
 ~~~text
 .
@@ -95,7 +111,10 @@ All builds run inside Docker.
 │   ├── float/
 │   └── runtime/
 └── test/
+    ├── Dockerfile.cpm
+    ├── run_tests.sh
     ├── lib/
+    │   └── cpm/
     ├── include/
     └── src/
         ├── compile/
@@ -109,15 +128,16 @@ All builds run inside Docker.
 | `src/int/`               | Integer helpers (`char`/`int`/`long` mul/div/mod, mixed signed/unsigned paths, widening helpers, legacy aliases). |
 | `src/float/`             | IEEE-754 `float` helpers (arithmetics, comparisons, conversions, shared packing/unpacking routines). |
 | `src/runtime/`           | SDCC runtime glue for indirect calls, frame entry, banked calls, and critical-section symbol compatibility. |
-| `test/`                  | ZX Spectrum test suite and bare-metal SDCC examples. |
-| `test/lib/`              | ZX Spectrum–specific support code and `crt0`. |
-| `test/include/`          | Header files used by tests. |
-| `test/src/`              | Test sources. |
-| `test/src/compile/`      | Compile+link-only tests that verify SDCC-generated helper references resolve (no ZX runtime execution). |
-| `test/src/execute/`      | Executed ZX Spectrum TAP tests validating runtime behavior for integer and floating-point operations. |
+| `test/`                  | CP/M-based test suite. |
+| `test/Dockerfile.cpm`    | Builds a Docker image with RunCPM for executing `.COM` test binaries. |
+| `test/run_tests.sh`      | Runs each `.COM` binary under RunCPM and captures output to `bin/<name>.txt`. |
+| `test/lib/cpm/`          | CP/M platform support: `crt0`, `cputc`, `cputs`, `cinit`, `cclear`. |
+| `test/include/`          | Header files used by tests (`io.h`). |
+| `test/src/compile/`      | Compile+link-only tests that verify SDCC-generated helper references resolve. |
+| `test/src/execute/`      | CP/M `.COM` tests validating runtime behavior for integer and floating-point operations. |
 
-> **Note**  
-> All builds use the Docker image  
+> **Note**
+> All builds use the Docker image
 > [`wischner/sdcc-z80-zx-spectrum:latest`](https://hub.docker.com/r/wischner/sdcc-z80-zx-spectrum)
 
 ## How do I leave feedback?

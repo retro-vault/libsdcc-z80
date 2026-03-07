@@ -34,13 +34,9 @@ DOCKER_TEST_RUN    = docker run --rm \
                      -v "$(WORKDIR):/src" \
                      $(DOCKER_TEST_IMAGE)
 
-.PHONY: all tests lib clean cpm-tests run-tests docker-test-build docker-test-rebuild
+.PHONY: all lib clean cpm-tests run-tests docker-test-build docker-test-rebuild
 
-all: tests
-
-tests: lib
-	$(DOCKER_RUN) sh -c '$(MAKE) -C test \
-		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" all'
+all: lib
 
 lib:
 	$(DOCKER_RUN) sh -c '$(MAKE) -C src \
