@@ -1205,6 +1205,471 @@ static int test_ltof_runtime_long(void) {
     return 0;
 }
 
+/* ---------- shared print helper (used by donut + mixed tests) ----------- */
+
+static void mixed_check(const char *name, int16_t got, int16_t exp) {
+    if (got == exp) { cputs("  ok  "); }
+    else            { cputs("  FAIL "); }
+    cputs(name);
+    cputs(" got="); put_dec16(got);
+    cputs(" exp="); put_dec16(exp);
+    cputs("\n");
+}
+
+/* ---------- donut: sin/cos LUT and static framebuffer ------------------- */
+/*
+ * 32-entry lookup table: sin_lut32[k] = sin(k * 2π / 32) = sin(k * 11.25°)
+ * IEEE-754 single-precision, exact for 0, ±0.5, ±1.0; otherwise ±1 ULP.
+ * cos(x) = sin(x + π/2) = lut entry shifted by +8.
+ */
+static uint32_t sin_lut32[32] = {
+    0x00000000UL, /* sin(  0°) =  0.000000 */
+    0x3E47C5CEUL, /* sin( 11°) =  0.195090 */
+    0x3EC3EF15UL, /* sin( 23°) =  0.382683 */
+    0x3F0E39F1UL, /* sin( 34°) =  0.555570 */
+    0x3F3504F3UL, /* sin( 45°) =  0.707107 */
+    0x3F54A145UL, /* sin( 56°) =  0.831470 */
+    0x3F6C835EUL, /* sin( 68°) =  0.923880 */
+    0x3F7B14BEUL, /* sin( 79°) =  0.980785 */
+    0x3F800000UL, /* sin( 90°) =  1.000000 */
+    0x3F7B14BEUL, /* sin(101°) =  0.980785 */
+    0x3F6C835EUL, /* sin(113°) =  0.923880 */
+    0x3F54A145UL, /* sin(124°) =  0.831470 */
+    0x3F3504F3UL, /* sin(135°) =  0.707107 */
+    0x3F0E39F1UL, /* sin(146°) =  0.555570 */
+    0x3EC3EF15UL, /* sin(158°) =  0.382683 */
+    0x3E47C5CEUL, /* sin(169°) =  0.195090 */
+    0x00000000UL, /* sin(180°) =  0.000000 */
+    0xBE47C5CEUL, /* sin(191°) = -0.195090 */
+    0xBEC3EF15UL, /* sin(203°) = -0.382683 */
+    0xBF0E39F1UL, /* sin(214°) = -0.555570 */
+    0xBF3504F3UL, /* sin(225°) = -0.707107 */
+    0xBF54A145UL, /* sin(236°) = -0.831470 */
+    0xBF6C835EUL, /* sin(248°) = -0.923880 */
+    0xBF7B14BEUL, /* sin(259°) = -0.980785 */
+    0xBF800000UL, /* sin(270°) = -1.000000 */
+    0xBF7B14BEUL, /* sin(281°) = -0.980785 */
+    0xBF6C835EUL, /* sin(293°) = -0.923880 */
+    0xBF54A145UL, /* sin(304°) = -0.831470 */
+    0xBF3504F3UL, /* sin(315°) = -0.707107 */
+    0xBF0E39F1UL, /* sin(326°) = -0.555570 */
+    0xBEC3EF15UL, /* sin(338°) = -0.382683 */
+    0xBE47C5CEUL, /* sin(349°) = -0.195090 */
+};
+
+/* 5.09375f = 32 / (2π)  ≈ exact-binary approximation of 32/(2π)=5.0930 */
+#define DONUT_SCALE  0x40A30000UL
+
+static float donut_sin(float x) {
+    int16_t idx = (int16_t)(x * mk_f32(DONUT_SCALE));
+    return mk_f32(sin_lut32[(uint8_t)(idx & 31)]);
+}
+
+static float donut_cos(float x) {
+    int16_t idx = (int16_t)(x * mk_f32(DONUT_SCALE)) + 8;
+    return mk_f32(sin_lut32[(uint8_t)(idx & 31)]);
+}
+
+/* framebuffer in BSS — not on stack */
+static float donut_z[1760];
+static char  donut_b[1760];
+
+/* ---------- donut arithmetic -------------------------------------------- */
+/*
+ * The spinning donut uses these float patterns:
+ *   - many chained fmul/fadd/fsub
+ *   - fdiv: D = 1.0f / (expression + 5.0f)
+ *   - int*float promotion: x = (int)(40 + 30 * D * (...))
+ *   - float array comparison: if (D > z[o])
+ *   - conditional brightness: idx = (int)(N > 0 ? N : 0)
+ *
+ * sinf/cosf do not exist in this library.  We replace them with exact
+ * {0.0f, 1.0f} values so all intermediate results are predictable.
+ *
+ * Derivation of expected values:
+ *
+ *  Case 1 — "front face" (i=0, j=0, A=0, B=0):
+ *    c=sin(i)=0, d=cos(j)=1, e=sin(A)=0, f=sin(j)=0, g=cos(A)=1
+ *    l=cos(i)=1, m=cos(B)=1, n=sin(B)=0
+ *    h = d+2 = 3
+ *    D = 1/(c*h*e + f*g + 5) = 1/5 = 0.2
+ *    t = c*h*g - f*e = 0
+ *    x = (int)(40 + 30*0.2*(1*3*1 - 0*0)) = (int)(40+18) = 58
+ *    y = (int)(12 + 15*0.2*(1*3*0 + 0*1)) = (int)(12+0)  = 12
+ *    N = 8*((f*e - c*d*g)*m - c*d*e - f*g - l*d*n) = 0 -> idx=0 -> '.'
+ *
+ *  Case 2 — "side" (c=1,d=0,e=0,f=1,g=1,l=0,m=1,n=0):
+ *    h = 0+2 = 2
+ *    D = 1/(1*2*0 + 1*1 + 5) = 1/6
+ *    t = 1*2*1 - 1*0 = 2
+ *    x = (int)(40 + 30*(1/6)*(0*2*1 - 2*0)) = (int)(40+0) = 40
+ *    y = (int)(12 + 15*(1/6)*(0*2*0 + 2*1)) = (int)(12+5) = 17
+ *    N = 8*((1*0-1*0*1)*1 - 1*0*0 - 1*1 - 0*0*0) = 8*(-1) = -8 -> idx=0
+ *
+ *  Case 3 — "top" (c=0,d=1,e=1,f=0,g=0,l=1,m=0,n=1):
+ *    h = 1+2 = 3
+ *    D = 1/(0*3*1 + 0*0 + 5) = 0.2
+ *    t = 0*3*0 - 0*1 = 0
+ *    x = (int)(40 + 30*0.2*(1*3*0 - 0*1)) = (int)(40+0) = 40
+ *    y = (int)(12 + 15*0.2*(1*3*1 + 0*0)) = (int)(12+9) = 21
+ *    N = 8*((0*1-0*1*0)*0 - 0*1*1 - 0*0 - 1*1*1) = 8*(-1) = -8 -> idx=0
+ */
+
+/* One donut inner-body evaluation. Returns brightness index (0-11). */
+static int16_t donut_body(
+    float c, float d, float e, float f_, float g,
+    float l, float m, float n,
+    int16_t *out_x, int16_t *out_y, float *out_D)
+{
+    float h  = d + mk_f32(0x40000000UL);                  /* d + 2.0f */
+    float D  = mk_f32(0x3F800000UL) /
+               (c * h * e + f_ * g + mk_f32(0x40A00000UL)); /* 1/(... + 5) */
+    float t  = c * h * g - f_ * e;
+
+    *out_x = (int16_t)(mk_f32(0x42200000UL)               /* 40.0f */
+             + mk_f32(0x41F00000UL) * D                    /* 30.0f */
+             * (l * h * m - t * n));
+    *out_y = (int16_t)(mk_f32(0x41400000UL)               /* 12.0f */
+             + mk_f32(0x41700000UL) * D                    /* 15.0f */
+             * (l * h * n + t * m));
+    *out_D = D;
+
+    float N = mk_f32(0x41000000UL)                        /* 8.0f */
+            * ((f_ * e - c * d * g) * m
+               - c * d * e - f_ * g - l * d * n);
+
+    int16_t idx = (int16_t)(N > mk_f32(0x00000000UL) ? N
+                                                       : mk_f32(0x00000000UL));
+    if (idx > 11) idx = 11;
+    return idx;
+}
+
+static int test_donut_arith(void) {
+    int16_t score = 0, tot = 0;
+    float   zero  = mk_f32(0x00000000UL); /* 0.0f */
+    float   one   = mk_f32(0x3F800000UL); /* 1.0f */
+    int16_t x, y;
+    float   D;
+    int16_t idx;
+
+    cputs("-- donut arith --\n");
+
+    /* --- Case 1: front face ------------------------------------------- */
+    idx = donut_body(zero, one, zero, zero, one,   /* c d e f g */
+                     one,  one, zero,              /* l m n     */
+                     &x, &y, &D);
+    cputs("  case1 x="); put_dec16(x);
+    cputs(" y="); put_dec16(y);
+    cputs(" D=0x"); put_hex32(f32_bits(D));
+    cputs(" idx="); put_dec16(idx); cputs("\n");
+
+    tot++; if (x == 58)  score++;
+    mixed_check("donut case1 x==58",  x,   58);
+    tot++; if (y == 12)  score++;
+    mixed_check("donut case1 y==12",  y,   12);
+    tot++; if (idx == 0) score++;
+    mixed_check("donut case1 idx==0", idx,  0);
+
+    /* --- Case 2: side -------------------------------------------------- */
+    idx = donut_body(one,  zero, zero, one,  one,
+                     zero, one,  zero,
+                     &x, &y, &D);
+    cputs("  case2 x="); put_dec16(x);
+    cputs(" y="); put_dec16(y);
+    cputs(" D=0x"); put_hex32(f32_bits(D));
+    cputs(" idx="); put_dec16(idx); cputs("\n");
+
+    tot++; if (x == 40) score++;
+    mixed_check("donut case2 x==40", x,  40);
+    tot++; if (y == 17) score++;
+    mixed_check("donut case2 y==17", y,  17);
+    tot++; if (idx == 0) score++;
+    mixed_check("donut case2 idx==0", idx, 0);
+
+    /* --- Case 3: top --------------------------------------------------- */
+    idx = donut_body(zero, one,  one,  zero, zero,
+                     one,  zero, one,
+                     &x, &y, &D);
+    cputs("  case3 x="); put_dec16(x);
+    cputs(" y="); put_dec16(y);
+    cputs(" D=0x"); put_hex32(f32_bits(D));
+    cputs(" idx="); put_dec16(idx); cputs("\n");
+
+    tot++; if (x == 40) score++;
+    mixed_check("donut case3 x==40", x,  40);
+    tot++; if (y == 21) score++;
+    mixed_check("donut case3 y==21", y,  21);
+    tot++; if (idx == 0) score++;
+    mixed_check("donut case3 idx==0", idx, 0);
+
+    /* --- z[o] float comparison pattern --------------------------------- */
+    /* Verify D > 0 (unpainted slot) is true, and D > D is false.        */
+    {
+        volatile float D1 = mk_f32(0x3E4CCCCDUL); /* ~0.2 */
+        volatile float D2 = mk_f32(0x3E4CCCCDUL); /* same */
+        volatile float z0 = mk_f32(0x00000000UL); /* 0.0 - unpainted */
+        int16_t first_ok   = (D1 > z0) ? 1 : 0;  /* should paint */
+        int16_t second_ok  = (D2 > D1) ? 1 : 0;  /* equal: should NOT */
+        tot++; if (first_ok  == 1) score++;
+        mixed_check("donut D>0.0 paints slot",       first_ok,  1);
+        tot++; if (second_ok == 0) score++;
+        mixed_check("donut equal D does not repaint", second_ok, 0);
+    }
+
+    /* --- nested float loop (no sinf needed) ---------------------------- */
+    /* 3×3 grid of (j,i) with trig = {0,1}; count valid-screen pixels.   */
+    {
+        float trig[2];
+        trig[0] = zero;
+        trig[1] = one;
+        int16_t valid = 0;
+        uint8_t ji, ii;
+        for (ji = 0; ji < 2; ji++) {
+            for (ii = 0; ii < 2; ii++) {
+                float cv = trig[ii];
+                float dv = trig[1-ji];
+                int16_t lx, ly; float lD;
+                donut_body(cv, dv, zero, trig[ji], one,
+                           trig[1-ii], one, zero,
+                           &lx, &ly, &lD);
+                if (lx >= 0 && lx < 80 && ly >= 0 && ly < 22)
+                    valid++;
+            }
+        }
+        tot++; if (valid == 4) score++;
+        mixed_check("donut 2x2 grid all on-screen", valid, 4);
+    }
+
+    put_dec16(score); cputs("/"); put_dec16(tot); cputs(" donut arith ok\n");
+    return (score == tot) ? 1 : 0;
+}
+
+/* ---------- donut: full render (no display) ----------------------------- */
+/*
+ * Runs the full donut inner loop for one frame (A=0, B=0).
+ * sinf/cosf replaced by 32-entry LUT.  z[] and b[] are static (not stack).
+ * Verifies that the float pipeline completes without crash and paints
+ * a plausible number of pixels.
+ */
+static int test_donut_full(void) {
+    float j, i;
+    uint16_t painted = 0;
+    uint16_t k;
+
+    /* 2π, step_j=0.07, step_i=0.02 as IEEE-754 constants */
+    float two_pi  = mk_f32(0x40C90FDBUL); /* 6.28318f */
+    float step_j  = mk_f32(0x3D8F5C29UL); /* 0.07f    */
+    float step_i  = mk_f32(0x3CA3D70AUL); /* 0.02f    */
+    float zero_f  = mk_f32(0x00000000UL);
+    float one_f   = mk_f32(0x3F800000UL);
+    float two_f   = mk_f32(0x40000000UL);
+    float five_f  = mk_f32(0x40A00000UL);
+    float eight_f = mk_f32(0x41000000UL);
+    float f30     = mk_f32(0x41F00000UL);
+    float f40     = mk_f32(0x42200000UL);
+    float f15     = mk_f32(0x41700000UL);
+    float f12     = mk_f32(0x41400000UL);
+
+    /* rotation angles A=0, B=0 for this frame */
+    float sinA = zero_f, cosA = one_f;
+    float sinB = zero_f, cosB = one_f;
+
+    cputs("-- donut full --\n");
+
+    for (k = 0; k < 1760; k++) {
+        donut_z[k] = zero_f;
+        donut_b[k] = ' ';
+    }
+
+    for (j = zero_f; j < two_pi; j += step_j) {
+        float cosJ = donut_cos(j);
+        float sinJ = donut_sin(j);
+
+        for (i = zero_f; i < two_pi; i += step_i) {
+            float sinI = donut_sin(i);
+            float cosI = donut_cos(i);
+
+            /* donut geometry */
+            float h = cosJ + two_f;
+            float D = one_f / (sinI * h * sinA + sinJ * cosA + five_f);
+            float t = sinI * h * cosA - sinJ * sinA;
+
+            int16_t x = (int16_t)(f40 + f30 * D * (cosI * h * cosB - t * sinB));
+            int16_t y = (int16_t)(f12 + f15 * D * (cosI * h * sinB + t * cosB));
+
+            if (y >= 0 && y < 22 && x >= 0 && x < 80) {
+                uint16_t o = (uint16_t)x + (uint16_t)80 * (uint16_t)y;
+                if (D > donut_z[o]) {
+                    float N = eight_f * ((sinJ * sinA - sinI * cosJ * cosA) * cosB
+                                        - sinI * cosJ * sinA
+                                        - sinJ * cosA
+                                        - cosI * cosJ * sinB);
+                    int16_t idx = (int16_t)(N > zero_f ? N : zero_f);
+                    if (idx > 11) idx = 11;
+                    donut_z[o] = D;
+                    donut_b[o] = ".,-~:;=!*#$@"[(uint8_t)idx];
+                    painted++;
+                }
+            }
+        }
+    }
+
+    cputs("  painted="); put_dec16((int16_t)painted); cputs("\n");
+
+    /* With A=B=0 the donut cross-section is visible; expect a reasonable fill */
+    int16_t ok = (painted > 50 && painted <= 1760) ? 1 : 0;
+    mixed_check("donut full: 50 < painted <= 1760", ok, 1);
+    return ok;
+}
+
+/* ---------- mixed int/float arithmetic ---------------------------------- */
+
+static int test_mixed_arith(void) {
+    int16_t score = 0, tot = 0;
+    cputs("-- mixed int/float arith --\n");
+
+    /* 1. user's crashing case: float A=3.14f; int N=100; float B=N*A; */
+    {
+        volatile float   A = mk_f32(0x4048F5C3UL); /* 3.14f */
+        volatile int16_t N = mk_s16(100);
+        float B = N * A;
+        int16_t got = (int16_t)B;
+        tot++; if (got == 314) score++;
+        cputs("  "); if (got == 314) cputs("ok  "); else cputs("FAIL ");
+        cputs("user case B=N*A bits=0x"); put_hex32(f32_bits(B));
+        cputs(" (int)B="); put_dec16(got); cputs("\n");
+    }
+
+    /* 2. explicit cast: (float)N * A */
+    {
+        volatile int16_t N = mk_s16(100);
+        volatile float   A = mk_f32(0x4048F5C3UL); /* 3.14f */
+        int16_t got = (int16_t)((float)N * A);
+        tot++; if (got == 314) score++;
+        mixed_check("(int)((float)100 * 3.14f) == 314", got, 314);
+    }
+
+    /* 3. float / int */
+    {
+        volatile float   A = mk_f32(0x42C80000UL); /* 100.0f */
+        volatile int16_t N = mk_s16(4);
+        int16_t got = (int16_t)(A / (float)N);
+        tot++; if (got == 25) score++;
+        mixed_check("(int)(100.0f / 4) == 25", got, 25);
+    }
+
+    /* 4. int + float (truncates toward zero) */
+    {
+        volatile int16_t N = mk_s16(7);
+        volatile float   A = mk_f32(0x3F000000UL); /* 0.5f */
+        int16_t got = (int16_t)((float)N + A);
+        tot++; if (got == 7) score++;
+        mixed_check("(int)(7 + 0.5f) == 7", got, 7);
+    }
+
+    /* 5. int - float (truncates toward zero) */
+    {
+        volatile int16_t N = mk_s16(10);
+        volatile float   A = mk_f32(0x3F000000UL); /* 0.5f */
+        int16_t got = (int16_t)((float)N - A);
+        tot++; if (got == 9) score++;
+        mixed_check("(int)(10 - 0.5f) == 9", got, 9);
+    }
+
+    /* 6. float-to-int truncates toward zero (positive) */
+    {
+        volatile float A = mk_f32(0x40600000UL); /* 3.5f */
+        int16_t got = (int16_t)A;
+        tot++; if (got == 3) score++;
+        mixed_check("(int)(3.5f) == 3", got, 3);
+    }
+
+    /* 7. float-to-int truncates toward zero (negative) */
+    {
+        volatile float A = mk_f32(0xC0600000UL); /* -3.5f */
+        int16_t got = (int16_t)A;
+        tot++; if (got == -3) score++;
+        mixed_check("(int)(-3.5f) == -3", got, -3);
+    }
+
+    /* 8. negative int * positive float: -1 * 5.0f */
+    {
+        volatile int16_t N = mk_s16(-1);
+        volatile float   A = mk_f32(0x40A00000UL); /* 5.0f */
+        int16_t got = (int16_t)((float)N * A);
+        tot++; if (got == -5) score++;
+        mixed_check("(int)((-1) * 5.0f) == -5", got, -5);
+    }
+
+    /* 9. negative int * positive float: -7 * 2.0f */
+    {
+        volatile int16_t N = mk_s16(-7);
+        volatile float   A = mk_f32(0x40000000UL); /* 2.0f */
+        int16_t got = (int16_t)((float)N * A);
+        tot++; if (got == -14) score++;
+        mixed_check("(int)((-7) * 2.0f) == -14", got, -14);
+    }
+
+    /* 10. accumulation loop: sum 10 x 1.0f */
+    {
+        float sum = mk_f32(0x00000000UL); /* 0.0f */
+        uint8_t i;
+        for (i = 0; i < 10; i++) sum += mk_f32(0x3F800000UL); /* 1.0f */
+        int16_t got = (int16_t)sum;
+        tot++; if (got == 10) score++;
+        mixed_check("sum 10x1.0f cast to int == 10", got, 10);
+    }
+
+    /* 11. loop counter * float accumulation: sum i*2.0f for i=0..4 = 20 */
+    {
+        float acc = mk_f32(0x00000000UL); /* 0.0f */
+        volatile float step = mk_f32(0x40000000UL); /* 2.0f */
+        uint8_t i;
+        for (i = 0; i < 5; i++) acc += (float)mk_u8(i) * step;
+        int16_t got = (int16_t)acc;
+        tot++; if (got == 20) score++;
+        mixed_check("sum i*2.0f i=0..4 == 20", got, 20);
+    }
+
+    /* 12. int roundtrip: (int16_t)(float)32000 == 32000 */
+    {
+        volatile int16_t N = mk_s16(32000);
+        float F = (float)N;
+        int16_t got = (int16_t)F;
+        tot++; if (got == 32000) score++;
+        mixed_check("(int16_t)(float)32000 roundtrip", got, 32000);
+    }
+
+    /* 13. zero cast */
+    {
+        volatile float A = mk_f32(0x00000000UL); /* 0.0f */
+        int16_t got = (int16_t)A;
+        tot++; if (got == 0) score++;
+        mixed_check("(int)(0.0f) == 0", got, 0);
+    }
+
+    /* 14. negative int roundtrip: (int16_t)(float)-100 == -100 */
+    {
+        volatile int16_t N = mk_s16(-100);
+        float F = (float)N;
+        int16_t got = (int16_t)F;
+        tot++; if (got == -100) score++;
+        mixed_check("(int16_t)(float)-100 roundtrip", got, -100);
+    }
+
+    /* 15. large positive * small float: 1000 * 0.5f == 500 */
+    {
+        volatile int16_t N = mk_s16(1000);
+        volatile float   A = mk_f32(0x3F000000UL); /* 0.5f */
+        int16_t got = (int16_t)((float)N * A);
+        tot++; if (got == 500) score++;
+        mixed_check("(int)(1000 * 0.5f) == 500", got, 500);
+    }
+
+    put_dec16(score); cputs("/"); put_dec16(tot); cputs(" mixed arith ok\n");
+    return (score == tot) ? 1 : 0;
+}
+
 /* ---------- main -------------------------------------------------------- */
 
 void main(void){
@@ -1329,6 +1794,13 @@ void main(void){
     total++; passed += test_fsdiv_one_over_one();
     total++; passed += test_fsdiv_neg_over_neg();
     total++; passed += test_ltof_runtime_long();
+
+    /* --- mixed int/float arithmetic --- */
+    total++; passed += test_mixed_arith();
+
+    /* --- donut arithmetic --- */
+    total++; passed += test_donut_arith();
+    total++; passed += test_donut_full();
 
 #if(_DEBUG)
     dump_fdebug();

@@ -198,19 +198,68 @@ ___fsdiv:
         rl      -15(ix)
         djnz    .div_loop
 
+        ;; ---- round-to-nearest ----
+        ;;
+        ;; DEC holds the 24-bit remainder from the div_loop.
+        ;; The round bit is the 25th quotient bit:
+        ;;   - int_bit_zero: 25th bit = 1  iff  (rem<<1) >= divisor
+        ;;   - int_bit_one:  we shift quotient right 1; carry = round bit
+        ;;
+        ;; We must handle int_bit_zero BEFORE loading B/C from frame,
+        ;; because that would overwrite C (= rem LSB).
+
+        ld      a,-16(ix)
+        or      a
+        jr      nz,.round_shift
+
+        ;; --- int_bit_zero: test 25th bit = (rem << 1) >= divisor ---
+        sla     c
+        rl      e
+        rl      d
+        jr      c,.do_round             ;; shift overflowed -> always >= divisor
+        ld      a,d
+        cp      -12(ix)
+        jr      c,.no_round
+        jr      nz,.do_round
+        ld      a,e
+        cp      -11(ix)
+        jr      c,.no_round
+        jr      nz,.do_round
+        ld      a,c
+        cp      -10(ix)
+        jr      c,.no_round
+        jr      .do_round               ;; rem == divisor/2: round half up
+
+        ;; --- int_bit_one: shift quotient right 1; carry = round bit ---
+.round_shift:
+        srl     -15(ix)
+        rr      -14(ix)
+        rr      -13(ix)
+        jr      nc,.no_round            ;; round bit (shifted-out q0) = 0
+
+.do_round:
+        ;; increment 24-bit quotient (little-endian: -13=LSB, -15=MSB)
+        inc     -13(ix)
+        jr      nz,.no_round
+        inc     -14(ix)
+        jr      nz,.no_round
+        inc     -15(ix)
+        jr      nz,.no_round
+        ;; mantissa wrapped 0xFFFFFF -> 0x000000: re-normalize
+        ld      -15(ix),#0x80           ;; set implicit-1 bit
+        ld      a,-6(ix)
+        inc     a
+        ld      -6(ix),a               ;; bump exponent
+
+.no_round:
         ;; ---- normalize and pack ----
         ld      b,-5(ix)
         ld      c,-6(ix)
 
-        ld      a,-16(ix)
-        or      a
-        jr      z,.div_pack_noshift
+        ;; for int_bit_zero the quotient needs no further shift;
+        ;; for int_bit_one the srl/rr/rr was already done above.
 
-        srl     -15(ix)
-        rr      -14(ix)
-        rr      -13(ix)
-
-.div_pack_noshift:
+.div_pack_done:
         res     7,-15(ix)
 
         ld      e,-13(ix)

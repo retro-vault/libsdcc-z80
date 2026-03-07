@@ -1,0 +1,19 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build RunCPM (CP/M emulator that runs .COM files from a directory tree).
+RUN git clone --depth 1 https://github.com/MockbaTheBorg/RunCPM.git /tmp/runcpm && \
+    cd /tmp/runcpm/RunCPM && \
+    make -f Makefile.posix && \
+    install -m 755 RunCPM /usr/local/bin/RunCPM && \
+    rm -rf /tmp/runcpm
+
+ENTRYPOINT ["/bin/sh"]
