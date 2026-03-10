@@ -1,69 +1,146 @@
-# Top-level Makefile: fix clean to work with overridden BUILD_DIR/BIN_DIR
-
-# Docker settings.
-DOCKER_IMAGE ?= wischner/sdcc-z80-zx-spectrum:latest
-WORKDIR      := $(PWD)
-
-# Output directories (relative to repo root by default).
-BUILD_DIR ?= build
-BIN_DIR   ?= bin
-
-# Paths as seen inside the container.
-ROOT_DOCKER := /work
-ifneq ($(filter /%,$(BUILD_DIR)),)
-BUILD_DIR_DOCKER := $(BUILD_DIR)
-else
-BUILD_DIR_DOCKER := $(ROOT_DOCKER)/$(BUILD_DIR)
+# We only allow compilation on Linux.
+ifneq ($(shell uname), Linux)
+ifndef INSIDE_DOCKER
+$(error OS must be Linux!)
+endif
 endif
 
-ifneq ($(filter /%,$(BIN_DIR)),)
-BIN_DIR_DOCKER := $(BIN_DIR)
-else
-BIN_DIR_DOCKER := $(ROOT_DOCKER)/$(BIN_DIR)
-endif
+# --------------------------------------------------------------------------
+# Folders
+# --------------------------------------------------------------------------
+export ROOT       := $(realpath .)
+export BUILD_DIR  ?= $(ROOT)/build
+export BIN_DIR    ?= $(ROOT)/bin
 
-# Run container mounting the repo at /work; keep host ownership for outputs.
-DOCKER_RUN = docker run --rm \
-             -u $$(id -u):$$(id -g) \
-             -v "$(WORKDIR):/work" -w /work \
-             $(DOCKER_IMAGE)
+# --------------------------------------------------------------------------
+# Library names
+# --------------------------------------------------------------------------
+export TARGET     := libsdcc-z80
 
-# CP/M test-runner image (RunCPM). Mounts repo at /src (matches run_tests.sh).
-DOCKER_TEST_IMAGE ?= libsdcc-z80-test
-DOCKER_TEST_RUN    = docker run --rm \
-                     -v "$(WORKDIR):/src" \
+# --------------------------------------------------------------------------
+# Tools and flags
+# --------------------------------------------------------------------------
+export CC         := sdcc
+export AS         := sdasz80
+export AR         := sdar
+export CPP        := sdcpp
+export LD         := sdldz80
+
+# --------------------------------------------------------------------------
+# Docker (on by default). Set DOCKER=off for a native build.
+# --------------------------------------------------------------------------
+DOCKER            ?= on
+
+DOCKER_IMAGE      := wischner/sdcc-z80
+DOCKER_RUN        := docker run --rm \
+                     -v "$(ROOT)":/src \
+                     -w /src \
+                     -e INSIDE_DOCKER=1 \
+                     --user $(shell id -u):$(shell id -g) \
+                     $(DOCKER_IMAGE)
+
+DOCKER_TEST_IMAGE := libsdcc-z80-test
+DOCKER_TEST_RUN   := docker run --rm \
+                     -v "$(ROOT)":/src \
                      $(DOCKER_TEST_IMAGE)
 
-.PHONY: all lib clean cpm-tests run-tests docker-test-build docker-test-rebuild
+# --------------------------------------------------------------------------
+# Native tool check (only when building without Docker)
+# --------------------------------------------------------------------------
+ifndef INSIDE_DOCKER
+ifeq ($(DOCKER),off)
+REQUIRED = $(CC) $(AR) $(AS) $(CPP) $(LD) sdobjcopy
+K := $(foreach exec,$(REQUIRED),\
+    $(if $(shell which $(exec)),,$(error "$(exec) not found. Install SDCC or use DOCKER=on.")))
+endif
+endif
 
-all: lib
+# --------------------------------------------------------------------------
+# Internal native build (called directly or from inside Docker)
+# --------------------------------------------------------------------------
+SUBDIRS := src
 
-lib:
-	$(DOCKER_RUN) sh -c '$(MAKE) -C src \
-		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" all'
+.PHONY: _build
+_build: $(BUILD_DIR) $(SUBDIRS)
+	cp --dereference "$(BUILD_DIR)/$(TARGET).lib" "$(BIN_DIR)"
 
-# Build the CP/M test-runner Docker image (once; or rebuild with docker-test-rebuild).
+.PHONY: $(BUILD_DIR)
+$(BUILD_DIR):
+	rm -rf "$(BUILD_DIR)" "$(BIN_DIR)"
+	mkdir -p "$(BUILD_DIR)" "$(BIN_DIR)"
+
+.PHONY: $(SUBDIRS)
+$(SUBDIRS):
+	$(MAKE) -C $@ BUILD_DIR="$(BUILD_DIR)"
+
+# --------------------------------------------------------------------------
+# Default build
+# --------------------------------------------------------------------------
+.DEFAULT_GOAL := all
+
+ifeq ($(DOCKER),on)
+.PHONY: all
+all:
+	$(DOCKER_RUN) make _build BUILD_DIR=/src/build BIN_DIR=/src/bin
+else
+.PHONY: all
+all: _build
+endif
+
+# --------------------------------------------------------------------------
+# Tests
+# --------------------------------------------------------------------------
+ifeq ($(DOCKER),on)
+.PHONY: test
+test: docker-test-build
+	$(DOCKER_RUN) sh -c "make _build BUILD_DIR=/src/build BIN_DIR=/src/bin && make -C test BUILD_DIR=/src/build BIN_DIR=/src/bin all"
+	$(DOCKER_TEST_RUN) /src/test/run_tests.sh itest ftest
+else
+.PHONY: test
+test: _build
+	$(MAKE) -C test BUILD_DIR="$(BUILD_DIR)" BIN_DIR="$(BIN_DIR)" all
+endif
+
+.PHONY: docker-test-build
 docker-test-build:
 	docker build -t $(DOCKER_TEST_IMAGE) -f test/Dockerfile.cpm test/
 
+.PHONY: docker-test-rebuild
 docker-test-rebuild:
 	docker build --no-cache -t $(DOCKER_TEST_IMAGE) -f test/Dockerfile.cpm test/
 
-# Build library + CP/M platform lib + .COM test binaries.
-cpm-tests: lib
-	$(DOCKER_RUN) sh -c '$(MAKE) -C test/lib/cpm \
-		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" all && \
-		$(MAKE) -C test/src/execute \
-		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" cpm'
+# Backward-compatible aliases.
+.PHONY: lib cpm-tests run-tests
+lib: all
 
-# Run .COM binaries through RunCPM; write results to bin/itest.txt, bin/ftest.txt.
-# Builds the Docker image and .COM binaries automatically if needed.
-run-tests: docker-test-build cpm-tests
-	$(DOCKER_TEST_RUN) /src/test/run_tests.sh itest ftest
+cpm-tests:
+	$(MAKE) test DOCKER=off BUILD_DIR="$(BUILD_DIR)" BIN_DIR="$(BIN_DIR)"
 
+run-tests: test
+
+# --------------------------------------------------------------------------
+# Clean
+# --------------------------------------------------------------------------
+.PHONY: clean
 clean:
-	$(DOCKER_RUN) sh -c '$(MAKE) -C src \
-		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" clean'
-	$(DOCKER_RUN) sh -c '$(MAKE) -C test \
-		BUILD_DIR="$(BUILD_DIR_DOCKER)" BIN_DIR="$(BIN_DIR_DOCKER)" clean'
-	rm -rf $(BUILD_DIR) $(BIN_DIR)
+	rm -rf "$(BUILD_DIR)" "$(BIN_DIR)"
+
+# --------------------------------------------------------------------------
+# Help
+# --------------------------------------------------------------------------
+.PHONY: help
+help:
+	@echo "Usage: make [target] [VARIABLE=value ...]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  (default)    Build the library"
+	@echo "  test         Build tests; also run them when DOCKER=on"
+	@echo "  clean        Remove build/ and bin/"
+	@echo "  docker-test-build    Build the RunCPM Docker image"
+	@echo "  docker-test-rebuild  Rebuild the RunCPM Docker image without cache"
+	@echo ""
+	@echo "Variables:"
+	@echo "  DOCKER=on           Build inside Docker (default)"
+	@echo "  DOCKER=off          Build natively (requires SDCC on PATH)"
+	@echo "  BUILD_DIR=<path>    Override intermediate build directory (default: build/)"
+	@echo "  BIN_DIR=<path>      Override output directory (default: bin/)"

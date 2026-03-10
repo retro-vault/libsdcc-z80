@@ -2,108 +2,98 @@
 
 # libsdcc-z80
 
-## introduction
+## Table of contents
 
-**libsdcc-z80** is a bare-metal runtime library for the *SDCC* C compiler targeting
-the *Z80* processor. It is intended for builds where the standard SDCC runtime is
-disabled using `--nostdlib`, `--nostdinc`, and `--no-std-crt0`.
+- [Introduction](#introduction)
+- [Features](#features)
+- [Building the Library](#building-the-library)
+- [Running the Tests](#running-the-tests)
+- [Output Files](#output-files)
+- [Directory Structure](#directory-structure)
+- [Feedback](#feedback)
 
-In this mode, SDCC does not provide startup code or runtime support. This is
-commonly used when targeting custom or unsupported Z80 systems, or when writing
-firmware or operating systems with full control over memory layout and startup.
+## Introduction
 
-The *Z80* processor lacks native support for many C language operations, such as
-integer and floating-point arithmetic and certain type conversions. SDCC replaces
-these operations with calls to helper functions, which are normally supplied by
-the standard runtime.
+**libsdcc-z80** is a bare-metal runtime library for *SDCC* targeting the *Z80*
+processor. It is intended for builds that disable the standard SDCC runtime
+with `--nostdlib`, `--nostdinc`, and `--no-std-crt0`.
 
-**libsdcc-z80** provides these missing helper routines as optimized Z80 assembly.
-The C source code remains unchanged, helper calls are generated automatically by
-the compiler, and all symbols are resolved by the linker.
+When used in that mode, SDCC still emits calls to helper routines for integer
+math, floating-point math, conversions, indirect calls, and other runtime glue.
+This repository provides those helper routines as Z80 assembly so the linker
+can resolve them without the stock SDCC runtime.
 
-## features
+## Features
 
-- 100% Z80 assembly (zero C in the runtime)
-- Optimized for speed
-- Supports `int`, `long`, `float`
-- Includes compiler runtime glue used by SDCC code generation
-- Full coverage of arithmetic, comparisons, shifts, and type conversions
-- Docker-based build (no local toolchain required)
-- Automated CP/M test suite running under [RunCPM](https://github.com/MockbaTheBorg/RunCPM)
+- 100% Z80 assembly runtime
+- Integer, long, and float helper routines used by SDCC code generation
+- Runtime support helpers such as indirect call entry points and banked-call glue
+- Unified `DOCKER=on/off` build flow matching `libcpm3-z80`
+- CP/M-based tests that can be compiled natively or built and run in Docker
 
-## what is included
+## Building the Library
 
-`libsdcc-z80` is split by compiler feature usage, not just by file type.
+The top-level `Makefile` now follows the same parameter model as
+`libcpm3-z80`.
 
-- `src/int/`
-  - 8/16/32-bit integer helpers used when C emits runtime calls for:
-    - multiply, divide, modulo
-    - signed/unsigned mixed arithmetic
-    - promotion/widening paths (for example 16x16 -> 32)
-  - Compatibility alias symbols (`*_rrx_s`, `*_rrf_s`) are exported directly from implementation entry points.
-- `src/float/`
-  - IEEE-754 single-precision helpers used for:
-    - `+`, `-`, `*`, `/` on `float`
-    - float comparisons
-    - int/long <-> float conversions
-    - shared float pack/unpack/return helpers
-- `src/runtime/`
-  - SDCC runtime/platform helpers used by non-arithmetic codegen:
-    - indirect calls (`___sdcc_call_hl`, `___sdcc_call_iy`) used by function-pointer calls
-    - frame-entry helper (`___sdcc_enter_ix`) for shared prologue patterns
-    - banked-call helpers (`___sdcc_bcall`, `___sdcc_bcall_ehl`)
-    - critical-section helper symbol (`___sdcc_critical`) for compiler/runtime compatibility
+### Commands
 
-# building
+| Command | Description |
+|---------|-------------|
+| `make` | Build the library |
+| `make test` | Build tests; when `DOCKER=on` also run them in RunCPM |
+| `make clean` | Remove `build/` and `bin/` |
 
-## using makefile
+### Parameters
 
-The project is built using `make` and runs entirely inside Docker. No local SDCC installation is required.
+| Parameter | Values | Default | Description |
+|-----------|--------|---------|-------------|
+| `DOCKER` | `on`, `off` | `on` | `on` builds inside `wischner/sdcc-z80`. `off` builds natively and requires SDCC tools on `PATH`. |
+| `BUILD_DIR` | path | `build/` | Intermediate build products. |
+| `BIN_DIR` | path | `bin/` | Final outputs copied from the build. |
 
-~~~sh
-make          # build library only
-make lib      # build library only
-make clean
-~~~
+Examples:
 
-The library is placed in the `bin/` directory.
+```sh
+make
+make DOCKER=off
+make DOCKER=off BUILD_DIR=out/build BIN_DIR=out/bin
+```
 
-To integrate the build into another project, override the output directories using relative paths:
+## Running the Tests
 
-~~~sh
-make BUILD_DIR=obj BIN_DIR=output
-~~~
+```sh
+make test
+```
 
-> **Note**
-> When custom output directories are used, the same variables must also be
-> provided when cleaning:
->
-> ~~~sh
-> make BUILD_DIR=obj BIN_DIR=output clean
-> ~~~
+Behavior depends on `DOCKER`:
 
-## running tests
+- `DOCKER=on` builds the library, builds the CP/M test binaries, builds the
+  RunCPM test image if needed, and runs the tests.
+- `DOCKER=off` builds the library and test binaries only. This is intended for
+  local SDCC workflows where you want the `.com` outputs but not the emulator run.
 
-Tests compile to CP/M `.COM` binaries and run under
-[RunCPM](https://github.com/MockbaTheBorg/RunCPM) inside Docker.
-A single command builds the test image, compiles all tests, runs them, and
-writes results to `bin/itest.txt` and `bin/ftest.txt`:
+Test results produced by the Docker flow are written to `bin/itest.txt` and
+`bin/ftest.txt`.
 
-~~~sh
-make run-tests
-~~~
+## Output Files
 
-Additional test targets:
+All final outputs are placed in `bin/` (or `BIN_DIR` if overridden):
 
-~~~sh
-make docker-test-build    # build the RunCPM Docker image (done automatically by run-tests)
-make docker-test-rebuild  # force-rebuild the RunCPM image without cache
-make cpm-tests            # compile .COM binaries without running them
-~~~
+| File | Description |
+|------|-------------|
+| `libsdcc-z80.lib` | SDCC Z80 runtime helper library |
+| `libcpm.lib` | CP/M support library used by the executable tests |
+| `crt0cpm.rel` | CP/M CRT0 object used by the executable tests |
+| `itest.com` | Integer runtime execution test |
+| `ftest.com` | Floating-point runtime execution test |
 
-## directory structure
+The top-level build copies `libsdcc-z80.lib` from `BUILD_DIR` into `BIN_DIR`,
+matching the `libcpm3-z80` packaging convention.
 
-~~~text
+## Directory Structure
+
+```text
 .
 ├── Makefile
 ├── src/
@@ -113,34 +103,24 @@ make cpm-tests            # compile .COM binaries without running them
 └── test/
     ├── Dockerfile.cpm
     ├── run_tests.sh
+    ├── include/
     ├── lib/
     │   └── cpm/
-    ├── include/
     └── src/
         ├── compile/
         └── execute/
-~~~
+```
 
-| path                     | description |
-|--------------------------|-------------|
-| `Makefile`               | Top-level build entry point. Pulls the Docker image and delegates builds to subdirectories. |
-| `src/`                   | `libsdcc-z80` runtime library (Z80 assembly only). |
-| `src/int/`               | Integer helpers (`char`/`int`/`long` mul/div/mod, mixed signed/unsigned paths, widening helpers, legacy aliases). |
-| `src/float/`             | IEEE-754 `float` helpers (arithmetics, comparisons, conversions, shared packing/unpacking routines). |
-| `src/runtime/`           | SDCC runtime glue for indirect calls, frame entry, banked calls, and critical-section symbol compatibility. |
-| `test/`                  | CP/M-based test suite. |
-| `test/Dockerfile.cpm`    | Builds a Docker image with RunCPM for executing `.COM` test binaries. |
-| `test/run_tests.sh`      | Runs each `.COM` binary under RunCPM and captures output to `bin/<name>.txt`. |
-| `test/lib/cpm/`          | CP/M platform support: `crt0`, `cputc`, `cputs`, `cinit`, `cclear`. |
-| `test/include/`          | Header files used by tests (`io.h`). |
-| `test/src/compile/`      | Compile+link-only tests that verify SDCC-generated helper references resolve. |
-| `test/src/execute/`      | CP/M `.COM` tests validating runtime behavior for integer and floating-point operations. |
+| Path | Description |
+|------|-------------|
+| `src/int/` | Integer helper routines used by SDCC |
+| `src/float/` | IEEE-754 single-precision helper routines |
+| `src/runtime/` | Non-arithmetic runtime helper entry points |
+| `test/src/compile/` | Compile/link coverage tests |
+| `test/src/execute/` | CP/M executable runtime tests |
+| `test/lib/cpm/` | Minimal CP/M support code for executable tests |
 
-> **Note**
-> All builds use the Docker image
-> [`wischner/sdcc-z80-zx-spectrum:latest`](https://hub.docker.com/r/wischner/sdcc-z80-zx-spectrum)
-
-## How do I leave feedback?
+## Feedback
 
 Use the GitHub Issues at the top of this page.
 
@@ -150,4 +130,4 @@ Use the GitHub Issues at the top of this page.
 [license.url]:    https://github.com/retro-vault/libsdcc-z80/blob/main/LICENSE
 [license.badge]:  https://img.shields.io/badge/license-GPL2-blue.svg
 
-[status.badge]:  https://img.shields.io/badge/status-stable-dkgreen.svg
+[status.badge]:   https://img.shields.io/badge/status-stable-dkgreen.svg
